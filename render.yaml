@@ -82,6 +82,7 @@ services:
     name: jinanam-redis
     region: singapore
     plan: free
+    ipAllowList: []
 
   # ─── Background Worker (BullMQ) ────────────────────────────────────────────
   - type: worker
