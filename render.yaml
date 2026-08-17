@@ -77,6 +77,12 @@ services:
       - key: OTP_RATE_LIMIT_MAX
         value: 5
 
+  # ─── Redis ─────────────────────────────────────────────────────────────────
+  - type: redis
+    name: jinanam-redis
+    region: singapore
+    plan: free
+
   # ─── Background Worker (BullMQ) ────────────────────────────────────────────
   - type: worker
     name: jinanam-worker
@@ -112,9 +118,3 @@ databases:
     region: singapore
     plan: free
 
-# ─── Redis ───────────────────────────────────────────────────────────────────
-  - type: redis
-    name: jinanam-redis
-    region: singapore
-    plan: free
-    maxmemoryPolicy: noeviction
