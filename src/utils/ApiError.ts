@@ -1,5 +1,6 @@
 export type ErrorCode =
   | 'VALIDATION_ERROR'
+  | 'BAD_REQUEST'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
@@ -11,6 +12,7 @@ export type ErrorCode =
 
 const STATUS_BY_CODE: Record<ErrorCode, number> = {
   VALIDATION_ERROR: 422,
+  BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
@@ -36,6 +38,10 @@ export class ApiError extends Error {
 
   static validation(fieldErrors: Record<string, string[]>, message = 'Validation failed') {
     return new ApiError('VALIDATION_ERROR', message, fieldErrors);
+  }
+
+  static badRequest(message = 'Bad request') {
+    return new ApiError('BAD_REQUEST', message);
   }
 
   static unauthorized(message = 'Unauthorized') {

@@ -86,6 +86,11 @@ export const makeOrganizationController = (type: OrganizationType) => ({
     return created(res, row);
   }),
 
+  addAnnouncement: asyncHandler(async (req: Request, res: Response) => {
+    const row = await orgService.addTempleAnnouncement(req.params.organizationId as string, req.body, req.actor!.userId);
+    return created(res, row);
+  }),
+
   follow: asyncHandler(async (req: Request, res: Response) => {
     const member = await prisma.member.findUnique({ where: { userId: req.actor!.userId } });
     if (!member) throw ApiError.notFound('Member profile not found');
@@ -171,6 +176,12 @@ export const orgExtras = (_type: OrganizationType) => ({
   /* Delete notice */
   deleteNotice: asyncHandler(async (req: Request, res: Response) => {
     await prisma.organizationNotice.delete({ where: { id: req.params.noticeId } });
+    return ok(res, { deleted: true });
+  }),
+
+  /* Delete announcement */
+  deleteAnnouncement: asyncHandler(async (req: Request, res: Response) => {
+    await prisma.announcement.delete({ where: { id: req.params.announcementId } });
     return ok(res, { deleted: true });
   }),
 

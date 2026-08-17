@@ -41,10 +41,20 @@ export async function createEvent(input: Record<string, unknown> & { organizatio
 
   const event = await prisma.$transaction(async (tx) => {
     const publicId = await nextPublicId('EVENT', tx);
+    const dataPayload = { ...rest } as any;
+    if (!dataPayload.categoryId || dataPayload.categoryId === "") {
+      delete dataPayload.categoryId;
+    } else if (dataPayload.categoryId) {
+      const catExists = await tx.eventCategory.findUnique({ where: { id: dataPayload.categoryId } });
+      if (!catExists) {
+        delete dataPayload.categoryId;
+      }
+    }
+
     return tx.event.create({
       data: {
         publicId,
-        ...rest,
+        ...dataPayload,
         attachments: attachments as Prisma.InputJsonValue,
         visibilityConfig: visibilityConfig as Prisma.InputJsonValue,
         status: 'DRAFT',
@@ -134,7 +144,7 @@ async function schedulePublishSideEffects(eventId: string) {
   const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
   const now = Date.now();
   const startMs = event.startAt.getTime();
-  const endMs = event.endAt.getTime();
+  const endMs = event.endAt ? event.endAt.getTime() : now;
 
   // Auto-complete at end time (§5.9)
   await getQueue(QUEUE_NAMES.EVENT_LIFECYCLE).add('auto-complete', { eventId }, { delay: Math.max(endMs - now, 0), jobId: `event-complete-${eventId}` });
@@ -161,6 +171,11 @@ async function schedulePublishSideEffects(eventId: string) {
 
   // Automatic feed-card generation (§5.13)
   const { createAutoFeedCard } = await import('@/modules/feed/feed.service');
+  const visConfig = (event.visibilityConfig as any) || {};
+  if (visConfig?.geo?.country === 'Entire India' && visConfig?.sect === 'All Jain Members') {
+    visConfig.isPublic = true;
+  }
+
   await createAutoFeedCard({
     sourceModule: 'EVENTS',
     sourceId: event.id,
@@ -168,7 +183,7 @@ async function schedulePublishSideEffects(eventId: string) {
     title: event.title,
     description: event.description ?? undefined,
     coverUrl: event.bannerUrl ?? undefined,
-    visibilityConfig: (event.visibilityConfig as Record<string, unknown>) ?? undefined,
+    visibilityConfig: visConfig,
   });
 
   // Publish notification to eligible members (visibility engine fan-out)
@@ -326,6 +341,53 @@ export async function cancelRsvp(eventId: string, memberId: string) {
   return { cancelled: true };
 }
 
+export async function checkInRsvp(eventId: string, rsvpId: string, actor: { userId: string, isSuperAdmin: boolean }) {
+  const rsvpRow = await prisma.eventRsvp.findUnique({ where: { id: rsvpId }, include: { event: true } });
+  if (!rsvpRow || rsvpRow.eventId !== eventId) throw ApiError.notFound('RSVP not found');
+  
+  // Verify permissions
+  if (!actor.isSuperAdmin) {
+    const isMember = await prisma.userOrganization.findFirst({
+      where: { organizationId: rsvpRow.event.organizationId, userId: actor.userId }
+    });
+    if (!isMember || !['SUPER_ADMIN', 'TEMPLE_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'PAGE_OWNER', 'EVENT_SCANNER'].includes(isMember.roleKey)) {
+      throw ApiError.forbidden('You do not have permission to check-in for this event');
+    }
+  }
+
+  if (rsvpRow.status === 'CHECKED_IN') return rsvpRow;
+  if (rsvpRow.status !== 'CONFIRMED') throw ApiError.conflict('RSVP is not confirmed');
+
+  return prisma.eventRsvp.update({
+    where: { id: rsvpId },
+    data: { status: 'CHECKED_IN' }
+  });
+}
+
+export async function checkInRsvpManual(rsvpId: string, actor: { userId: string, isSuperAdmin: boolean }) {
+  const rsvpRow = await prisma.eventRsvp.findUnique({ where: { id: rsvpId }, include: { event: true } });
+  if (!rsvpRow) throw ApiError.notFound('RSVP not found');
+  
+  // Verify permissions
+  if (!actor.isSuperAdmin) {
+    const isMember = await prisma.userOrganization.findFirst({
+      where: { organizationId: rsvpRow.event.organizationId, userId: actor.userId }
+    });
+    if (!isMember || !['SUPER_ADMIN', 'TEMPLE_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'PAGE_OWNER', 'EVENT_SCANNER'].includes(isMember.roleKey)) {
+      throw ApiError.forbidden('You do not have permission to check-in for this event');
+    }
+  }
+
+  if (rsvpRow.status === 'CHECKED_IN') return rsvpRow;
+  if (rsvpRow.status !== 'CONFIRMED') throw ApiError.conflict('RSVP is not confirmed');
+
+  return prisma.eventRsvp.update({
+    where: { id: rsvpId },
+    data: { status: 'CHECKED_IN' }
+  });
+}
+
+
 /** Slot frees -> promote longest-waiting -> notify (§5.9). */
 async function promoteFromWaitingList(eventId: string) {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
@@ -440,17 +502,24 @@ export async function memberEvents(memberId: string, query: { scope: string; org
     case 'today': {
       const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dayEnd = new Date(dayStart.getTime() + 24 * 3600_000);
-      return prisma.event.findMany({
+      const events = await prisma.event.findMany({
         where: { deletedAt: null, status: { in: ['PUBLISHED', 'RSVP_SALES_OPEN', 'LIVE'] }, startAt: { gte: dayStart, lt: dayEnd }, organizationId: query.organizationId },
+        include: { organization: { select: { name: true } }, category: true, rsvps: { where: { memberId }, select: { status: true } } },
         orderBy: { startAt: 'asc' },
         skip,
         take,
       });
+      return events.map((ev: any) => {
+        const isRsvped = ev.rsvps && ev.rsvps.length > 0;
+        const rsvpStatus = isRsvped ? ev.rsvps[0].status : null;
+        delete ev.rsvps;
+        return { ...ev, isRsvped, rsvpStatus };
+      });
     }
     case 'my-rsvp':
       return prisma.eventRsvp.findMany({
-        where: { memberId, status: 'CONFIRMED' },
-        include: { event: true },
+        where: { memberId },
+        include: { event: { include: { organization: { select: { name: true } }, category: true } } },
         orderBy: { createdAt: 'desc' },
         skip,
         take,
@@ -458,7 +527,7 @@ export async function memberEvents(memberId: string, query: { scope: string; org
     case 'waiting-list':
       return prisma.eventRsvp.findMany({
         where: { memberId, status: 'WAITING_LIST' },
-        include: { event: true },
+        include: { event: { include: { organization: { select: { name: true } }, category: true } } },
         orderBy: { waitingListPosition: 'asc' },
         skip,
         take,
@@ -483,36 +552,71 @@ export async function memberEvents(memberId: string, query: { scope: string; org
       } else if (query.year) {
         where.startAt = { gte: new Date(query.year, 0, 1), lt: new Date(query.year + 1, 0, 1) };
       }
-      return prisma.event.findMany({ where, orderBy: { startAt: 'desc' }, skip, take });
+      return prisma.event.findMany({ 
+        where, 
+        include: { organization: { select: { name: true } }, category: true },
+        orderBy: { startAt: 'desc' }, 
+        skip, 
+        take 
+      });
     }
     case 'upcoming':
     default:
-      return prisma.event.findMany({
-        where: { deletedAt: null, status: { in: ['PUBLISHED', 'RSVP_SALES_OPEN'] }, startAt: { gte: now }, organizationId: query.organizationId },
+      const events = await prisma.event.findMany({
+        where: {
+          deletedAt: null,
+          status: { in: ['PUBLISHED', 'RSVP_SALES_OPEN', 'LIVE'] },
+          OR: [
+            { endAt: { gte: now } },
+            { endAt: null as any, startAt: { gte: new Date(now.getTime() - 2 * 3600_000) } }
+          ],
+          organizationId: query.organizationId
+        },
+        include: { organization: { select: { name: true } }, category: true, rsvps: { where: { memberId }, select: { status: true } } },
         orderBy: { startAt: 'asc' },
         skip,
         take,
       });
+      return events.map((ev: any) => {
+        const isRsvped = ev.rsvps && ev.rsvps.length > 0;
+        const rsvpStatus = isRsvped ? ev.rsvps[0].status : null;
+        delete ev.rsvps;
+        return { ...ev, isRsvped, rsvpStatus };
+      });
   }
 }
 
-export async function getEvent(eventIdOrPublicId: string) {
+export async function getEvent(eventIdOrPublicId: string, userId?: string) {
+  const includeOptions: any = {
+    organization: { select: { name: true, publicId: true } },
+    category: true,
+    ticketCategories: { where: { deletedAt: null } },
+    galleryImages: { orderBy: { order: 'asc' } },
+    videoLinks: true,
+  };
+  if (userId) {
+    includeOptions.rsvps = { where: { member: { userId } }, select: { status: true } };
+  }
+
   const event = await prisma.event.findFirst({
     where: { OR: [{ id: eventIdOrPublicId }, { publicId: eventIdOrPublicId }], deletedAt: null },
-    include: {
-      organization: { select: { name: true, publicId: true } },
-      category: true,
-      ticketCategories: { where: { deletedAt: null } },
-      galleryImages: { orderBy: { order: 'asc' } },
-      videoLinks: true,
-    },
+    include: includeOptions,
   });
   if (!event) throw ApiError.notFound('Event not found');
   // §74: shareable deep link — opens the app if installed, otherwise the
   // member app's own deep-link handler redirects to the store. Generation
   // is all that's in scope here; the open-in-app/redirect behavior lives in
   // the member app, which doesn't exist in this repo.
-  return { ...event, shareUrl: eventShareUrl(event.publicId) };
+  
+  const eventToReturn = { ...event, shareUrl: eventShareUrl(event.publicId) } as any;
+  if (userId) {
+    const isRsvped = (event as any).rsvps && (event as any).rsvps.length > 0;
+    eventToReturn.isRsvped = isRsvped;
+    if (isRsvped) eventToReturn.rsvpStatus = (event as any).rsvps[0].status;
+    delete eventToReturn.rsvps;
+  }
+  
+  return eventToReturn;
 }
 
 /** §76: events a given MS profile is linked to — queried live, never a stale synced copy. */

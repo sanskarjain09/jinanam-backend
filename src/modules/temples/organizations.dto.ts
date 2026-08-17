@@ -10,12 +10,14 @@ export const createOrganizationSchema = z.object({
     communityId: z.string().optional(),
     subCommunityId: z.string().optional(),
     gacchaId: z.string().optional(),
+    parentOrganizationId: z.string().optional(),
     mulNayakBhagwanId: z.string().optional(),
     mulNayakImageUrl: z.string().optional(),
     muritCount: z.number().int().optional(),
     templeType: z.enum(['SHIKHAR_BADDHA', 'GHAR_DERASAR', 'JAIN_CENTRE']).optional(),
     tithiCalendarTypeId: z.string().optional(),
     history: z.string().optional(),
+    establishedDate: z.preprocess((val) => (val === "" || val === null ? undefined : val), z.coerce.date().optional()),
     addressLine: z.string().optional(),
     city: z.string().optional(),
     state: z.string().optional(),
@@ -25,6 +27,11 @@ export const createOrganizationSchema = z.object({
     lng: z.number().optional(),
     googleMapsLink: z.string().optional(),
     facilities: z.array(z.string()).optional(),
+    activeModules: z.array(z.string()).optional(),
+    hasDharamshala: z.boolean().optional(),
+    dharamshalaPublished: z.boolean().optional(),
+    hasPathshala: z.boolean().optional(),
+    pathshalaPublished: z.boolean().optional(),
     hasUpashray: z.boolean().optional(),
     upashrayLocation: z.string().optional(),
     hasEventHall: z.boolean().optional(),
@@ -57,6 +64,7 @@ export const createOrganizationSchema = z.object({
     pathshalaTeacher: z.string().optional(),
     pathshalaTeacherMemberId: z.string().optional(),
     hasBhojanshala: z.boolean().optional(),
+    bhojanshalaPublished: z.boolean().optional(),
     bhojanshalaBreakfastCharge: z.string().optional(),
     bhojanshalaBreakfastTiming: z.string().optional(),
     bhojanshalaLunchCharge: z.string().optional(),
@@ -175,3 +183,12 @@ export const addNoticeSchema = z.object({
 export const addGalleryImageSchema = z.object({ body: z.object({ imageUrl: z.string().min(1), order: z.number().int().optional() }) });
 
 export const reportIncorrectInfoSchema = z.object({ body: z.object({ description: z.string().min(1) }) });
+
+export const addTempleAnnouncementSchema = z.object({
+  body: z.object({
+    title: z.string().min(1),
+    body: z.string().min(1),
+    visibilityConfig: z.record(z.unknown()).optional(),
+  }),
+});
+

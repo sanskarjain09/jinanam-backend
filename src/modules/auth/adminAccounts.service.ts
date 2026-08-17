@@ -6,7 +6,7 @@ import { ApiError } from '@/utils/ApiError';
 import { enqueueNotification } from '@/engines/notification/notification.service';
 import { MODULES } from '@/config/constants';
 
-const ADMIN_ROLES: RoleKey[] = ['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN'];
+const ADMIN_ROLES: RoleKey[] = ['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'BHOJANSHALA_ADMIN', 'STAFF', 'SECURITY_GUARD', 'EVENT_SCANNER'];
 
 // DELETE stays Super-Admin-only everywhere regardless of stored permissions
 // (see assertNotDeleteUnlessSuperAdmin) — no point granting it to an Admin.
@@ -28,6 +28,13 @@ export async function createAdminAccount(input: {
   grantedModules?: string[];
 }) {
   if (!ADMIN_ROLES.includes(input.role)) throw ApiError.validation({ role: ['Must be one of ' + ADMIN_ROLES.join(', ')] });
+
+  const creator = await prisma.user.findUnique({ where: { id: input.createdById }, select: { primaryRoleKey: true } });
+  if (creator?.primaryRoleKey !== 'SUPER_ADMIN') {
+    if (!['STAFF', 'SECURITY_GUARD', 'EVENT_SCANNER'].includes(input.role)) {
+      throw ApiError.forbidden('You can only delegate specific operational roles like STAFF.');
+    }
+  }
 
   const existing = await prisma.user.findUnique({ where: { mobile: input.mobile } });
   if (existing) throw ApiError.conflict('This mobile number is already registered');
@@ -58,8 +65,17 @@ export async function createAdminAccount(input: {
     return created;
   });
 
-  if (input.grantedModules && input.grantedModules.length > 0) {
-    await setAdminModuleGrants(user.id, input.grantedModules, input.createdById);
+  let modulesToGrant = input.grantedModules;
+  if (!modulesToGrant || modulesToGrant.length === 0) {
+    if (['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'BHOJANSHALA_ADMIN'].includes(input.role)) {
+      modulesToGrant = Object.values(MODULES);
+    } else {
+      modulesToGrant = ['EVENTS', 'STAFF', 'ANNOUNCEMENTS', 'POLLS', 'SETTINGS'];
+    }
+  }
+
+  if (modulesToGrant && modulesToGrant.length > 0) {
+    await setAdminModuleGrants(user.id, modulesToGrant, input.createdById);
   }
 
   await enqueueNotification({
@@ -90,6 +106,17 @@ export async function setAdminModuleGrants(targetUserId: string, grantedModules:
   const target = await prisma.user.findUniqueOrThrow({ where: { id: targetUserId } });
   if (!ADMIN_ROLES.includes(target.primaryRoleKey)) {
     throw ApiError.validation({ userId: ['Target user is not an admin account'] });
+  }
+
+  const actingAdmin = await prisma.user.findUnique({ where: { id: actingSuperAdminId }, select: { primaryRoleKey: true } });
+  if (actingAdmin?.primaryRoleKey !== 'SUPER_ADMIN') {
+    const actingAdminOverrides = await prisma.userPermissionOverride.findMany({
+      where: { userId: actingSuperAdminId, action: 'VIEW', allowed: true }
+    });
+    const actingAdminModules = new Set(actingAdminOverrides.map(o => o.module));
+    for (const m of grantedModules) {
+      if (!actingAdminModules.has(m)) throw ApiError.forbidden(`Cannot grant module ${m} which you do not possess.`);
+    }
   }
 
   const grantedSet = new Set(grantedModules);

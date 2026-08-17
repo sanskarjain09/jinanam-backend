@@ -64,3 +64,29 @@ dharamshalaRoutes.post('/buildings/:buildingId/wings', requireAuth, requirePermi
 dharamshalaRoutes.post('/wings/:wingId/rooms', requireAuth, requirePermission('DHARAMSHALAS', 'EDIT'), validate(createRoomSchema), dharamshalaController.createRoom);
 dharamshalaRoutes.patch('/rooms/:roomId', requireAuth, requirePermission('DHARAMSHALAS', 'EDIT'), validate(updateRoomSchema), dharamshalaController.updateRoom);
 
+
+import * as dharamshalaBookingController from './dharamshala-booking.controller';
+import { z } from 'zod';
+import { asyncHandler } from '@/utils/asyncHandler';
+
+const dharamBookingSchema = z.object({
+  body: z.object({
+    fromDate: z.coerce.date(),
+    toDate: z.coerce.date(),
+    numberOfRooms: z.number().min(1),
+    numberOfPersons: z.number().min(1)
+  })
+});
+
+dharamshalaRoutes.post(
+  '/:organizationId/bookings',
+  requireAuth,
+  validate(dharamBookingSchema),
+  asyncHandler(dharamshalaBookingController.createBooking)
+);
+
+dharamshalaRoutes.get(
+  '/bookings/my',
+  requireAuth,
+  asyncHandler(dharamshalaBookingController.getMyBookings)
+);

@@ -589,11 +589,79 @@ async function seedDemoData() {
   console.log('Seeded demo login accounts (Super Admin, Temple Admin, 4 Jain Members)');
 }
 
+// -----------------------------------------------------------------------------
+// 5. Bhojanshalas Demo Data
+// -----------------------------------------------------------------------------
+
+async function seedBhojanshalas() {
+  const adminMobile = '+919999900001';
+  const admin = await prisma.user.findUnique({ where: { mobile: adminMobile } });
+  
+  if (!admin) {
+    console.log('Admin not found, skipping bhojanshala seed');
+    return;
+  }
+
+  // Create a Demo Temple Organization
+  const orgName = 'Demo Jain Temple & Bhojanshala';
+  let org = await prisma.organization.findFirst({ where: { name: orgName } });
+  
+  if (!org) {
+    const orgPublicId = await prisma.$transaction((tx) => nextPublicId('TEMPLE', tx));
+    org = await prisma.organization.create({
+      data: {
+        publicId: orgPublicId,
+        type: 'TEMPLE',
+        name: orgName,
+        bhojanshalaBreakfastCharge: '50',
+        bhojanshalaBreakfastTiming: '08:00 AM - 10:00 AM',
+        bhojanshalaLunchCharge: '100',
+        bhojanshalaLunchTiming: '12:00 PM - 02:00 PM',
+        bhojanshalaDinnerCharge: '100',
+        bhojanshalaDinnerTiming: '05:30 PM - 07:30 PM',
+        status: 'ACTIVE',
+        createdById: admin.id,
+      }
+    });
+  }
+
+  // Add dummy menu items for Monday
+  const menus = [
+    { mealType: 'BREAKFAST', dayOfWeek: 'Monday', itemName: 'Poha, Jalebi, Tea, Milk' },
+    { mealType: 'LUNCH', dayOfWeek: 'Monday', itemName: 'Roti, Dal, Rice, 2 Sabzi, Buttermilk, Sweet' },
+    { mealType: 'DINNER', dayOfWeek: 'Monday', itemName: 'Khichdi, Kadhi, Bhakhri, Sabzi' },
+  ];
+
+  for (const m of menus) {
+    const existingMenu = await prisma.bhojanshalaMenuItem.findFirst({
+      where: {
+        organizationId: org.id,
+        mealType: m.mealType as any,
+        dayOfWeek: m.dayOfWeek,
+        itemName: m.itemName
+      }
+    });
+    if (!existingMenu) {
+      await prisma.bhojanshalaMenuItem.create({
+        data: {
+          organizationId: org.id,
+          mealType: m.mealType as any,
+          dayOfWeek: m.dayOfWeek,
+          itemName: m.itemName
+        }
+      });
+    }
+  }
+
+  console.log('Seeded Demo Bhojanshala Organization and Menu');
+}
+
 async function main() {
   await seedRolesAndPermissions();
   await seedMasterData();
   await seedSuperAdmin();
   await seedDemoData();
+  await seedBhojanshalas();
 }
 
 main()

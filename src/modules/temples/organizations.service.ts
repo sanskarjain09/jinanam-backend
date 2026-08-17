@@ -26,7 +26,7 @@ export async function createOrganization(input: Record<string, unknown> & { type
 
   const FK_RELATION_FIELDS = [
     'mulNayakBhagwanId', 'communityId', 'subCommunityId', 'gacchaId',
-    'tithiCalendarTypeId', 'createdById', 'updatedById',
+    'parentOrganizationId', 'tithiCalendarTypeId', 'createdById', 'updatedById',
   ];
   const cleanedRest = { ...rest };
   for (const field of FK_RELATION_FIELDS) {
@@ -248,7 +248,7 @@ export async function updateOrganization(organizationId: string, input: Record<s
   // Prisma FK constraint violations (e.g., mulNayakBhagwanId: "" → undefined).
   const FK_RELATION_FIELDS = [
     'mulNayakBhagwanId', 'communityId', 'subCommunityId', 'gacchaId',
-    'tithiCalendarTypeId', 'createdById', 'updatedById',
+    'parentOrganizationId', 'tithiCalendarTypeId', 'createdById', 'updatedById',
   ];
   const cleanedRest = { ...rest };
   for (const field of FK_RELATION_FIELDS) {
@@ -273,39 +273,6 @@ export async function updateOrganization(organizationId: string, input: Record<s
     await syncOrgBuildings(organizationId, buildings, cleanedRest.preferredCurrency);
   }
 
-  try {
-    const { createAutoFeedCard } = await import('@/modules/feed/feed.service');
-    const catName = org.type === 'TEMPLE' ? 'Temple Updates' : org.type === 'JAIN_CENTER' ? 'Jain Centre Updates' : 'Dharamshala Updates';
-    const categoryRow = await prisma.feedCategory.findUnique({ where: { name: catName } });
-
-    const visibilityConfig = {
-      isPublic: false,
-      community: {
-        communityIds: org.communityId ? [org.communityId] : [],
-        subCommunityIds: org.subCommunityId ? [org.subCommunityId] : [],
-        gacchaId: org.gacchaId ? [org.gacchaId] : []
-      },
-      geo: {
-        city: org.city || undefined,
-        state: org.state || undefined,
-        country: org.country || undefined
-      }
-    };
-
-    await createAutoFeedCard({
-      sourceModule: org.type === 'TEMPLE' ? 'TEMPLES' : org.type === 'JAIN_CENTER' ? 'JAIN_CENTERS' : 'DHARAMSHALAS',
-      sourceId: org.id,
-      organizationId: org.id,
-      title: `${org.name} Details Updated`,
-      description: `${org.name} profile details have been updated recently.`,
-      coverUrl: org.logoUrl || undefined,
-      visibilityConfig,
-      categoryId: categoryRow?.id,
-    });
-  } catch (err) {
-    console.error('Failed to create auto feed card for organization update:', err);
-  }
-
   return org;
 }
 
@@ -321,19 +288,24 @@ export async function getOrganization(organizationId: string) {
       dhajaRecords: { orderBy: { year: 'desc' } },
       notices: {
         where: {
-          deletedAt: null,
-          OR: [
-            { endDate: null },
-            { endDate: { gte: new Date() } }
-          ]
+          deletedAt: null
         },
         orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }]
       },
+      announcements: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' }
+      },
       socialLinks: true,
+      _count: {
+        select: { follows: true }
+      }
     },
   });
   if (!org) throw ApiError.notFound('Organization not found');
 
+  const followerCount = org._count?.follows || 0;
+  
   // If this is a Dharamshala, populate and map its buildings/rooms
   if (org.type === 'DHARAMSHALA') {
     const dbBuildings = await prisma.building.findMany({
@@ -384,21 +356,44 @@ export async function getOrganization(organizationId: string) {
 
     return {
       ...org,
+      followerCount,
       buildings: mappedBuildings
     };
   }
 
-  return org;
+  return {
+    ...org,
+    followerCount
+  };
 }
 
 export async function listOrganizations(type: OrganizationType, filters: { city?: string; state?: string; hasBhojanshala?: boolean }) {
+  const whereClause: any = {
+    deletedAt: null,
+    city: filters.city,
+    state: filters.state,
+  };
+
+  if (filters.hasBhojanshala !== undefined) {
+    whereClause.hasBhojanshala = filters.hasBhojanshala;
+  }
+
+  if (type === 'DHARAMSHALA') {
+    whereClause.dharamshalaPublished = true;
+  } else if (type === 'BHOJANSHALA') {
+    whereClause.bhojanshalaPublished = true;
+  } else {
+    whereClause.type = type;
+  }
+
   return prisma.organization.findMany({
-    where: {
-      type,
-      deletedAt: null,
-      city: filters.city,
-      state: filters.state,
-      hasBhojanshala: filters.hasBhojanshala,
+    where: whereClause,
+    include: {
+      userOrganizations: {
+        include: {
+          user: true
+        }
+      }
     },
     orderBy: { name: 'asc' },
   });
@@ -406,7 +401,7 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
 
 /** Bhojanalay directory — view-only listing of temples with bhojanshala = yes (§5.5). */
 export async function listBhojanalayDirectory() {
-  return prisma.organization.findMany({ where: { hasBhojanshala: true, deletedAt: null }, orderBy: { name: 'asc' } });
+  return prisma.organization.findMany({ where: { bhojanshalaPublished: true, deletedAt: null }, orderBy: { name: 'asc' } });
 }
 
 export async function addGalleryImage(organizationId: string, imageUrl: string, order: number, orgType: OrganizationType) {
@@ -568,6 +563,23 @@ export async function addNotice(organizationId: string, input: { title: string; 
   });
 
   return notice;
+}
+
+export async function addTempleAnnouncement(organizationId: string, input: { title: string; body: string; visibilityConfig?: Record<string, unknown> }, createdById: string) {
+  const announcement = await prisma.announcement.create({ data: { organizationId, title: input.title, body: input.body, visibilityConfig: input.visibilityConfig as Prisma.InputJsonValue, createdById } });
+
+  // Auto feed-card (§5.13)
+  const { createAutoFeedCard } = await import('@/modules/feed/feed.service');
+  await createAutoFeedCard({
+    sourceModule: 'ANNOUNCEMENTS',
+    sourceId: announcement.id,
+    organizationId,
+    title: input.title,
+    description: input.body,
+    visibilityConfig: input.visibilityConfig,
+  });
+
+  return announcement;
 }
 
 export async function followOrganization(organizationId: string, memberId: string) {

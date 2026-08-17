@@ -43,7 +43,6 @@ async function applyBadgesAndCurrency(memberId: string, dob: Date | null | undef
 }
 
 interface RegisterMemberInput {
-  userId: string;
   category: MemberCategory;
   firstName: string;
   middleName?: string;
@@ -91,21 +90,26 @@ interface RegisterMemberInput {
 const ADMIN_ROLES = ['SUPER_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN'];
 
 export async function registerMember(input: RegisterMemberInput) {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: input.userId } });
-  if (user.publicId) throw ApiError.conflict('Profile already exists for this account');
-  // Self-registration must never overwrite an admin account's role (admins
-  // registering members must use POST /members/admin-create instead)
-  if (ADMIN_ROLES.includes(user.primaryRoleKey)) {
-    throw ApiError.conflict('Admin accounts cannot self-register as members — use the admin member-creation flow');
+  // Ensure the mobile number isn't already registered to an existing profile.
+  const existingUser = await prisma.user.findUnique({ where: { mobile: input.mobile } });
+
+  if (existingUser) {
+    if (existingUser.publicId) throw ApiError.conflict('Profile already exists for this account');
+    // Self-registration must never overwrite an admin account's role
+    if (ADMIN_ROLES.includes(existingUser.primaryRoleKey)) {
+      throw ApiError.conflict('Admin accounts cannot self-register as members — use the admin member-creation flow');
+    }
+  }
+
+  if (input.email) {
+    const emailExists = await prisma.user.findUnique({ where: { email: input.email } });
+    if (emailExists) throw ApiError.conflict('This email address is already associated with another account. Please use a different email or leave it blank.');
   }
 
   if (input.category === 'JAIN' && !input.communityId) {
     throw ApiError.validation({ communityId: ['Community is required for Jain members'] });
   }
 
-  // Gaccha only exists under some Sub-Communities (e.g. Murtipujak) — require it
-  // whenever the chosen Sub-Community actually has Gacchas to pick from, so the
-  // field can't be silently skipped when it's genuinely applicable.
   if (input.category === 'JAIN' && input.subCommunityId && !input.gacchaId) {
     const gacchaCount = await prisma.gaccha.count({ where: { subCommunityId: input.subCommunityId, deletedAt: null } });
     if (gacchaCount > 0) {
@@ -125,11 +129,31 @@ export async function registerMember(input: RegisterMemberInput) {
   const country = (input.currentAddress?.country as string | undefined) ?? input.nationality;
 
   const member = await prisma.$transaction(async (tx) => {
+    let userId = existingUser?.id;
+
     const publicId = await nextPublicId(prefix, tx);
+
+    if (userId) {
+      await tx.user.update({
+        where: { id: userId },
+        data: { publicId, status: 'ACTIVE', primaryRoleKey: input.category === 'JAIN' ? 'MEMBER' : 'NON_JAIN_MEMBER' },
+      });
+    } else {
+      const user = await tx.user.create({
+        data: {
+          mobile: input.mobile,
+          email: input.email || undefined,
+          publicId,
+          status: 'ACTIVE',
+          primaryRoleKey: input.category === 'JAIN' ? 'MEMBER' : 'NON_JAIN_MEMBER',
+        },
+      });
+      userId = user.id;
+    }
 
     const created = await tx.member.create({
       data: {
-        userId: input.userId,
+        userId,
         publicId,
         category: input.category,
         firstName: input.firstName,
@@ -176,10 +200,7 @@ export async function registerMember(input: RegisterMemberInput) {
       },
     });
 
-    await tx.user.update({
-      where: { id: input.userId },
-      data: { publicId, status: 'ACTIVE', primaryRoleKey: input.category === 'JAIN' ? 'MEMBER' : 'NON_JAIN_MEMBER' },
-    });
+
 
     if (input.preferredTempleIds?.length) {
       await tx.memberPreferredTemple.createMany({
@@ -221,7 +242,11 @@ export async function registerMember(input: RegisterMemberInput) {
       });
     }
 
-    return created;
+    // Return created member with its nested user object for token generation
+    return await tx.member.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { user: true },
+    });
   });
 
   await seedDefaultPreferences(member.id);

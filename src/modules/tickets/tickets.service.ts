@@ -164,13 +164,20 @@ export async function purchaseTickets(input: {
 // -----------------------------------------------------------------------------
 
 export async function scanTicket(qrToken: string, scannerStaffId: string | null, gate?: string) {
-  const payload = verifySignedToken<{ purpose: 'EVENT_TICKET'; id: string; eventId: string }>(qrToken);
-  if (!payload || payload.purpose !== 'EVENT_TICKET') {
-    throw ApiError.validation({ qrToken: ['Invalid or tampered QR code'] });
+  let ticketId = qrToken;
+  let eventIdFromToken: string | null = null;
+  
+  if (qrToken.length > 50) { // arbitrary threshold to distinguish short ID vs long JWT/signed token
+    const payload = verifySignedToken<{ purpose: 'EVENT_TICKET'; id: string; eventId: string }>(qrToken);
+    if (!payload || payload.purpose !== 'EVENT_TICKET') {
+      throw ApiError.validation({ qrToken: ['Invalid or tampered QR code'] });
+    }
+    ticketId = payload.id;
+    eventIdFromToken = payload.eventId;
   }
 
   const ticket = await prisma.ticket.findUnique({
-    where: { publicId: payload.id },
+    where: { publicId: ticketId },
     include: {
       event: true,
       ticketCategory: { select: { name: true } },
@@ -181,7 +188,9 @@ export async function scanTicket(qrToken: string, scannerStaffId: string | null,
   });
 
   if (!ticket) throw ApiError.notFound('Ticket not found');
-  if (ticket.eventId !== payload.eventId) throw ApiError.validation({ qrToken: ['Ticket does not belong to this event'] });
+  if (eventIdFromToken && ticket.eventId !== eventIdFromToken) {
+    throw ApiError.validation({ qrToken: ['Ticket does not belong to this event'] });
+  }
 
   // Scan window: 24h before start until event end (§5.9)
   const now = new Date();

@@ -47,7 +47,7 @@ function getModel(listKey: string) {
 export const masterDataRoutes = Router();
 
 // Custom Bhagwan Master routes with Category support
-masterDataRoutes.get('/bhagwans', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+masterDataRoutes.get('/bhagwans', asyncHandler(async (req: Request, res: Response) => {
   const { category } = req.query;
   const rows = await prisma.bhagwanMaster.findMany({
     where: {
@@ -89,7 +89,7 @@ masterDataRoutes.patch('/bhagwans/:id', requireAuth, requireRole('SUPER_ADMIN'),
 }));
 
 // Hierarchical lists (registered before the generic /:listKey routes)
-masterDataRoutes.get('/sub-communities', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+masterDataRoutes.get('/sub-communities', asyncHandler(async (req: Request, res: Response) => {
   const rows = await prisma.subCommunity.findMany({ where: { deletedAt: null, communityId: req.query.communityId as string | undefined }, include: { community: true } });
   return ok(res, rows);
 }));
@@ -99,7 +99,7 @@ masterDataRoutes.post('/sub-communities', requireAuth, requireRole('SUPER_ADMIN'
   return created(res, row);
 }));
 
-masterDataRoutes.get('/gacchas', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+masterDataRoutes.get('/gacchas', asyncHandler(async (req: Request, res: Response) => {
   const rows = await prisma.gaccha.findMany({ where: { deletedAt: null, subCommunityId: req.query.subCommunityId as string | undefined }, include: { subCommunity: true } });
   return ok(res, rows);
 }));
@@ -109,7 +109,7 @@ masterDataRoutes.post('/gacchas', requireAuth, requireRole('SUPER_ADMIN'), async
   return created(res, row);
 }));
 
-masterDataRoutes.get('/staff-designations', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+masterDataRoutes.get('/staff-designations', asyncHandler(async (req: Request, res: Response) => {
   const rows = await prisma.staffDesignation.findMany({ where: { deletedAt: null, departmentId: req.query.departmentId as string | undefined } });
   return ok(res, rows);
 }));
@@ -119,7 +119,7 @@ masterDataRoutes.post('/staff-designations', requireAuth, requireRole('SUPER_ADM
   return created(res, row);
 }));
 
-masterDataRoutes.get('/counter-sub-types', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+masterDataRoutes.get('/counter-sub-types', asyncHandler(async (req: Request, res: Response) => {
   const rows = await prisma.counterSubType.findMany({ where: { deletedAt: null, counterTypeId: req.query.counterTypeId as string | undefined } });
   return ok(res, rows);
 }));
@@ -130,7 +130,7 @@ masterDataRoutes.post('/counter-sub-types', requireAuth, requireRole('SUPER_ADMI
 }));
 
 // Pathshala Centers directory (§5.5) — Super Admin CRUD, members view + call only
-masterDataRoutes.get('/pathshala-centers', requireAuth, asyncHandler(async (_req: Request, res: Response) => {
+masterDataRoutes.get('/pathshala-centers', asyncHandler(async (_req: Request, res: Response) => {
   const rows = await prisma.pathshalaCenter.findMany({ where: { deletedAt: null }, include: { contactMember: { select: { fullName: true, mobile: true } } } });
   return ok(res, rows);
 }));
@@ -141,7 +141,7 @@ masterDataRoutes.post('/pathshala-centers', requireAuth, requireRole('SUPER_ADMI
 }));
 
 // Generic name-keyed lists
-masterDataRoutes.get('/:listKey', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+masterDataRoutes.get('/:listKey', asyncHandler(async (req: Request, res: Response) => {
   const model = getModel(req.params.listKey as string);
   const rows = await model.findMany({ where: { deletedAt: null } });
   return ok(res, rows);

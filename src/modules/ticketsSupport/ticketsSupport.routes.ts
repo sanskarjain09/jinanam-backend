@@ -41,9 +41,8 @@ ticketsSupportRoutes.post(
   requireAuth,
   validate(raiseTicketSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const nonAdminOrSuperRoles = ['MEMBER', 'NON_JAIN_MEMBER', 'SUPER_ADMIN'];
-    if (nonAdminOrSuperRoles.includes(req.actor!.role)) {
-      throw ApiError.forbidden('Only administrators (excluding Super Admin) can raise support tickets.');
+    if (req.actor!.isSuperAdmin) {
+      throw ApiError.forbidden('Super Admins cannot raise support tickets, they resolve them.');
     }
     const ticket = await supportService.raiseTicket({ ...req.body, raisedByUserId: req.actor!.userId });
     return created(res, ticket);

@@ -3,10 +3,10 @@ import crypto from 'crypto';
 import { prisma } from '@/config/prisma';
 import { ApiError } from '@/utils/ApiError';
 import { requestOtp as sendOtp, verifyOtp as checkOtp } from './otp.service';
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from '@/engines/rbac/jwt.service';
+import { signAccessToken, signRefreshToken, verifyRefreshToken, signRegistrationToken } from '@/engines/rbac/jwt.service';
 import { logger } from '@/config/logger';
 
-interface DeviceMeta {
+export interface DeviceMeta {
   deviceId?: string;  // optional — server generates a fallback from IP+timestamp if absent
   deviceType: 'ANDROID' | 'IOS' | 'WEB';
   os?: string;
@@ -14,7 +14,7 @@ interface DeviceMeta {
   ip?: string;
 }
 
-function resolveDeviceId(device: DeviceMeta): string {
+export function resolveDeviceId(device: DeviceMeta): string {
   if (device.deviceId) return device.deviceId;
   // Fallback: stable per-IP+type identifier so sessions remain consistent
   return `server-${device.deviceType}-${crypto.createHash('sha1').update((device.ip || 'unknown') + device.deviceType).digest('hex').slice(0, 12)}`;
@@ -46,7 +46,7 @@ export async function requestOtpForPurpose(mobile: string, purpose: 'LOGIN' | 'R
   };
 }
 
-async function issueTokensForUser(user: { id: string; publicId: string | null; primaryRoleKey: any }, device: DeviceMeta) {
+export async function issueTokensForUser(user: { id: string; publicId: string | null; primaryRoleKey: any }, device: DeviceMeta) {
   const resolvedDeviceId = resolveDeviceId(device);
   const refreshTokenVersion = crypto.randomUUID();
   const refreshToken = signRefreshToken({ sub: user.id, deviceId: resolvedDeviceId, tokenVersion: refreshTokenVersion });
@@ -129,22 +129,16 @@ export async function verifyOtpAndAuthenticate(input: {
 
   if (input.purpose === 'REGISTER') {
     if (user) throw ApiError.conflict('This mobile number is already registered.');
-    user = await prisma.user.create({
-      data: {
-        mobile: input.mobile,
-        mobileVerifiedAt: new Date(),
-        status: 'PENDING_OTP', // flips to ACTIVE once the Members module completes minimum-field profile creation
-        primaryRoleKey: 'MEMBER',
-      },
-    });
-  } else {
-    if (!user) throw ApiError.notFound('This mobile number is not registered.');
-    if (['INACTIVE', 'SUSPENDED', 'BLOCKED', 'DELETED'].includes(user.status)) {
-      throw ApiError.forbidden(`Account is ${user.status.toLowerCase()}. Contact support.`);
-    }
-    if (!user.mobileVerifiedAt) {
-      user = await prisma.user.update({ where: { id: user.id }, data: { mobileVerifiedAt: new Date() } });
-    }
+    const registrationToken = signRegistrationToken({ mobile: input.mobile, verified: true, purpose: 'REGISTER' });
+    return { registrationToken };
+  }
+
+  if (!user) throw ApiError.notFound('This mobile number is not registered.');
+  if (['INACTIVE', 'SUSPENDED', 'BLOCKED', 'DELETED'].includes(user.status)) {
+    throw ApiError.forbidden(`Account is ${user.status.toLowerCase()}. Contact support.`);
+  }
+  if (!user.mobileVerifiedAt) {
+    user = await prisma.user.update({ where: { id: user.id }, data: { mobileVerifiedAt: new Date() } });
   }
 
   const suspicious = await flagSuspiciousIfNeeded(user.id, input.mobile);

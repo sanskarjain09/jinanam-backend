@@ -183,6 +183,41 @@ feedRoutes.delete(
   }),
 );
 
+// Record Feed Post View
+feedRoutes.post(
+  '/posts/:postId/view',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const member = await prisma.member.findUnique({ where: { userId: req.actor!.userId } });
+    if (!member) throw ApiError.notFound('Member profile not found');
+    const postId = req.params.postId as string;
+    
+    // Upsert the view record so it's idempotent
+    const existingView = await prisma.feedPostView.findUnique({
+      where: { feedPostId_memberId: { feedPostId: postId, memberId: member.id } }
+    });
+
+    let view;
+    if (!existingView) {
+      view = await prisma.feedPostView.create({
+        data: { feedPostId: postId, memberId: member.id }
+      });
+      // Increment viewCount safely only on first view
+      await prisma.feedPost.update({
+        where: { id: postId },
+        data: { viewCount: { increment: 1 } }
+      }).catch(() => {});
+    } else {
+      view = await prisma.feedPostView.update({
+        where: { id: existingView.id },
+        data: { viewedAt: new Date() }
+      });
+    }
+
+    return ok(res, view);
+  })
+);
+
 // Bookmark Feed Posts
 feedRoutes.post(
   '/posts/:postId/bookmark',
@@ -249,6 +284,69 @@ feedRoutes.post(
       where: { id: req.params.postId },
       data: { clickCount: { increment: 1 } }
     });
+    return ok(res, { success: true });
+  })
+);
+
+feedRoutes.post(
+  '/posts/:postId/toggle-like',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const member = await prisma.member.findUnique({ where: { userId: req.actor!.userId } });
+    if (!member) throw ApiError.notFound('Member profile not found');
+    const postId = req.params.postId as string;
+
+    const existingLike = await prisma.feedPostLike.findUnique({
+      where: { feedPostId_memberId: { feedPostId: postId, memberId: member.id } }
+    });
+
+    try {
+      if (existingLike) {
+        await prisma.feedPostLike.delete({
+          where: { id: existingLike.id }
+        });
+        await prisma.feedPost.update({
+          where: { id: postId },
+          data: { likeCount: { decrement: 1 } }
+        }).catch(() => {});
+        return ok(res, { liked: false });
+      } else {
+        await prisma.feedPostLike.create({
+          data: { feedPostId: postId, memberId: member.id }
+        });
+        await prisma.feedPost.update({
+          where: { id: postId },
+          data: { likeCount: { increment: 1 } }
+        }).catch(() => {});
+        return ok(res, { liked: true });
+      }
+    } catch (e: any) {
+      console.error('Error in toggle-like:', e);
+      const current = await prisma.feedPostLike.findUnique({
+        where: { feedPostId_memberId: { feedPostId: postId, memberId: member.id } }
+      });
+      return ok(res, { liked: !!current });
+    }
+  })
+);
+
+feedRoutes.post(
+  '/posts/:postId/report',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const member = await prisma.member.findUnique({ where: { userId: req.actor!.userId } });
+    if (!member) throw ApiError.notFound('Member profile not found');
+    const postId = req.params.postId as string;
+    const { reason } = req.body;
+
+    if (!reason) throw ApiError.validation({ reason: ['Reason is required for reporting'] });
+
+    await prisma.feedPostReport.upsert({
+      where: { feedPostId_memberId: { feedPostId: postId, memberId: member.id } },
+      update: { reason },
+      create: { feedPostId: postId, memberId: member.id, reason }
+    });
+
     return ok(res, { success: true });
   })
 );

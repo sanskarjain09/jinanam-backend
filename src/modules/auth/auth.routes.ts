@@ -51,8 +51,8 @@ authRoutes.get('/me/modules', requireAuth, authController.myModules);
 
 // Admin account management — Super Admin only (§3, §5.1)
 authRoutes.get('/admins', requireAuth, requireRole('SUPER_ADMIN'), authController.listAdmins);
-authRoutes.post('/admins', requireAuth, requireRole('SUPER_ADMIN'), validate(createAdminAccountSchema), authController.createAdminAccount);
+authRoutes.post('/admins', requireAuth, requireRole('SUPER_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'BHOJANSHALA_ADMIN', 'JAIN_CENTER_ADMIN'), validate(createAdminAccountSchema), authController.createAdminAccount);
 authRoutes.patch('/admins/:userId/organizations', requireAuth, requireRole('SUPER_ADMIN'), validate(assignAdminOrgsSchema), authController.assignAdminOrganizations);
-authRoutes.put('/admins/:userId/modules', requireAuth, requireRole('SUPER_ADMIN'), validate(updateAdminModulesSchema), authController.updateAdminModules);
+authRoutes.put('/admins/:userId/modules', requireAuth, requireRole('SUPER_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'BHOJANSHALA_ADMIN', 'JAIN_CENTER_ADMIN'), validate(updateAdminModulesSchema), authController.updateAdminModules);
 authRoutes.patch('/admins/:userId/status', requireAuth, requireRole('SUPER_ADMIN'), validate(setAdminActiveStatusSchema), authController.setAdminActiveStatus);
 authRoutes.delete('/admins/:userId', requireAuth, requireRole('SUPER_ADMIN'), authController.deleteAdminAccount);

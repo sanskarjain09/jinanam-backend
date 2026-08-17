@@ -49,6 +49,8 @@ eventRoutes.get('/reports/revenue/export', requireAuth, requireRole('SUPER_ADMIN
 // RSVP
 eventRoutes.post('/:eventId/rsvp', requireAuth, validate(rsvpSchema), eventsController.rsvp);
 eventRoutes.post('/:eventId/rsvp/cancel', requireAuth, eventsController.cancelRsvp);
+eventRoutes.post('/:eventId/rsvps/:rsvpId/checkin', requireAuth, eventsController.checkInRsvp);
+eventRoutes.post('/rsvps/:rsvpId/checkin', requireAuth, eventsController.checkInRsvpManual);
 
 // Post-event
 eventRoutes.post('/:eventId/gallery', requireAuth, requirePermission('GALLERY', 'CREATE'), validate(addGalleryImagesSchema), eventsController.addGalleryImages);

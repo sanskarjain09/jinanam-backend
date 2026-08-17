@@ -132,32 +132,6 @@ export async function updateMonk(monkId: string, input: Record<string, unknown>,
     }
   }
 
-  try {
-    const { createAutoFeedCard } = await import('@/modules/feed/feed.service');
-    const categoryRow = await prisma.feedCategory.findUnique({ where: { name: 'Monk Updates' } });
-
-    const visibilityConfig = {
-      isPublic: false,
-      community: {
-        communityIds: monk.communityId ? [monk.communityId] : [],
-        subCommunityIds: monk.subCommunityId ? [monk.subCommunityId] : [],
-        gacchaIds: monk.gacchaId ? [monk.gacchaId] : []
-      }
-    };
-
-    await createAutoFeedCard({
-      sourceModule: 'MONKS',
-      sourceId: monk.id,
-      title: `Maharaj Saheb Profile Updated`,
-      description: `${monk.dikshaName} details have been updated.`,
-      coverUrl: monk.photoUrl || undefined,
-      visibilityConfig,
-      categoryId: categoryRow?.id,
-    });
-  } catch (err) {
-    console.error('Failed to create auto feed card for monk update:', err);
-  }
-
   // Notify all followers about the profile update (fire-and-forget)
   void notifyMonkFollowers(
     monk.id,

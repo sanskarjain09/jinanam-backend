@@ -37,7 +37,20 @@ searchRoutes.get(
         prisma.organization.findUnique({ where: { publicId }, select: { id: true, publicId: true, name: true, type: true, city: true } }),
         prisma.member.findUnique({ where: { publicId } }),
         prisma.monkProfile.findUnique({ where: { publicId }, select: { id: true, publicId: true, dikshaName: true, photoUrl: true } }),
-        prisma.event.findUnique({ where: { publicId }, select: { id: true, publicId: true, title: true, startAt: true } }),
+        prisma.event.findUnique({ 
+          where: { publicId }, 
+          select: { 
+            id: true, 
+            publicId: true, 
+            title: true, 
+            status: true,
+            startAt: true,
+            endAt: true,
+            bannerUrl: true,
+            organization: { select: { name: true } },
+            category: { select: { name: true } }
+          } 
+        }),
         prisma.tour.findUnique({ where: { publicId }, select: { id: true, publicId: true, name: true } }),
         prisma.communityPage.findUnique({ where: { publicId }, select: { id: true, publicId: true, name: true } }),
       ]);
@@ -68,7 +81,18 @@ searchRoutes.get(
       }),
       prisma.event.findMany({
         where: { deletedAt: null, status: { in: ['PUBLISHED', 'RSVP_SALES_OPEN', 'LIVE'] }, title: { contains: query, mode: 'insensitive' } },
-        select: { id: true, publicId: true, title: true, startAt: true, venue: true },
+        select: { 
+          id: true, 
+          publicId: true, 
+          title: true,
+          status: true,
+          startAt: true,
+          endAt: true,
+          bannerUrl: true,
+          organization: { select: { name: true } },
+          category: { select: { name: true } },
+          venue: true 
+        },
         take: 10,
       }),
       prisma.communityPage.findMany({

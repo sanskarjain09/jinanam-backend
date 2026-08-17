@@ -32,6 +32,11 @@ const updateAddressSchema = z.object({
 
 export const registerJainMemberSchema = z.object({
   body: z.object({
+    registrationToken: z.string({ required_error: 'Required' }).min(1, 'Required'),
+    deviceId: z.string().optional(),
+    deviceType: z.string().optional(),
+    os: z.string().optional(),
+    appVersion: z.string().optional(),
     firstName: z.preprocess((val) => (val === '' ? undefined : val), z.string({ required_error: 'Required' }).min(1, 'Required')),
     middleName: z.preprocess((val) => (val === '' ? undefined : val), z.string({ required_error: 'Required' }).min(1, 'Required')),
     surname: z.preprocess((val) => (val === '' ? undefined : val), z.string({ required_error: 'Required' }).min(1, 'Required')),
@@ -52,7 +57,7 @@ export const registerJainMemberSchema = z.object({
     maritalStatus: z.preprocess((val) => (val === '' ? undefined : val), z.string({ required_error: 'Required' }).min(1, 'Required')),
     motherTongue: z.preprocess((val) => (val === '' ? undefined : val), z.string({ required_error: 'Required' }).min(1, 'Required')),
     communityId: z.string().min(1, 'Community is required'),
-    subCommunityId: z.preprocess((val) => (val === '' ? undefined : val), z.string({ required_error: 'Required' }).min(1, 'Required')),
+    subCommunityId: z.preprocess((val) => (val === '' ? undefined : val), z.string().optional()),
     gacchaId: z.preprocess((val) => (val === '' ? undefined : val), z.string().optional()),
     tithiCalendarTypeId: z.preprocess((val) => (val === '' ? undefined : val), z.string({ required_error: 'Required' }).min(1, 'Required')),
     whatsapp: z.preprocess((val) => (val === '' ? undefined : val), z.string().optional()),

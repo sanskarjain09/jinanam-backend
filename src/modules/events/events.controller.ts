@@ -50,7 +50,7 @@ export const listOrgEvents = asyncHandler(async (req: Request, res: Response) =>
     prisma.event.findMany({
       where, skip, take: parseInt(pageSize),
       orderBy: { startAt: 'desc' },
-      include: { category: { select: { name: true } } },
+      include: { category: { select: { name: true } }, _count: { select: { rsvps: true } } },
     }),
     prisma.event.count({ where }),
   ]);
@@ -100,9 +100,9 @@ export const transitionEvent = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const getEvent = asyncHandler(async (req: Request, res: Response) => {
-  const event = await eventsService.getEvent(req.params.eventId as string);
+  const event = await eventsService.getEvent(req.params.eventId as string, req.actor?.userId);
   // Draft visible to creator only (§5.9)
-  if (event.status === 'DRAFT' && event.createdById !== req.actor!.userId && !req.actor!.isSuperAdmin) {
+  if (event.status === 'DRAFT' && event.createdById !== req.actor?.userId && !req.actor?.isSuperAdmin) {
     throw ApiError.notFound('Event not found');
   }
   return ok(res, event);
@@ -128,6 +128,22 @@ export const rsvp = asyncHandler(async (req: Request, res: Response) => {
 export const cancelRsvp = asyncHandler(async (req: Request, res: Response) => {
   const member = await requireMember(req.actor!.userId);
   const result = await eventsService.cancelRsvp(req.params.eventId as string, member.id);
+  return ok(res, result);
+});
+
+export const checkInRsvp = asyncHandler(async (req: Request, res: Response) => {
+  const result = await eventsService.checkInRsvp(req.params.eventId as string, req.params.rsvpId as string, {
+    userId: req.actor!.userId,
+    isSuperAdmin: req.actor!.isSuperAdmin,
+  });
+  return ok(res, result);
+});
+
+export const checkInRsvpManual = asyncHandler(async (req: Request, res: Response) => {
+  const result = await eventsService.checkInRsvpManual(req.params.rsvpId as string, {
+    userId: req.actor!.userId,
+    isSuperAdmin: req.actor!.isSuperAdmin,
+  });
   return ok(res, result);
 });
 
@@ -168,7 +184,7 @@ export const cancelEvent = asyncHandler(async (req: Request, res: Response) => {
 export const listRsvps = asyncHandler(async (req: Request, res: Response) => {
   const rows = await prisma.eventRsvp.findMany({
     where: { eventId: req.params.eventId as string },
-    include: { member: { select: { publicId: true, fullName: true } } },
+    include: { member: { select: { publicId: true, fullName: true, user: { select: { email: true, mobile: true, firstName: true, lastName: true } } } } },
     orderBy: { createdAt: 'asc' },
   });
   return ok(res, rows);
@@ -177,7 +193,7 @@ export const listRsvps = asyncHandler(async (req: Request, res: Response) => {
 export const exportRsvps = asyncHandler(async (req: Request, res: Response) => {
   const rows = await prisma.eventRsvp.findMany({
     where: { eventId: req.params.eventId as string },
-    include: { member: { select: { publicId: true, fullName: true } } },
+    include: { member: { select: { publicId: true, fullName: true, user: { select: { email: true, mobile: true, firstName: true, lastName: true } } } } },
     orderBy: { createdAt: 'asc' },
   });
   const { sendListExport, parseExportFormat } = await import('@/utils/listExport');

@@ -22,6 +22,11 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
     purpose,
     device: { deviceId, deviceType, os, appVersion, ip: req.ip },
   });
+
+  if ('registrationToken' in result) {
+    return ok(res, { registrationToken: result.registrationToken });
+  }
+
   return ok(res, {
     userId: result.user.id,
     publicId: result.user.publicId,
@@ -145,7 +150,8 @@ export const myModules = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const createAdminAccount = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminAccountsService.createAdminAccount({ ...req.body, createdById: req.actor!.userId });
+  const { modules, ...rest } = req.body;
+  const result = await adminAccountsService.createAdminAccount({ ...rest, grantedModules: modules, createdById: req.actor!.userId });
   await recordAudit({
     ...auditContextFromRequest(req),
     module: 'SETTINGS',

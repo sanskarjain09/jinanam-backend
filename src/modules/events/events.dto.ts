@@ -13,7 +13,7 @@ export const createEventSchema = z.object({
     organizationId: z.string().min(1),
     title: z.string().min(1),
     bannerUrl: z.string().optional(),
-    categoryId: z.string().optional(),
+    categoryId: z.string().optional().transform(v => (v === "" ? undefined : v)),
     description: z.string().optional(),
     venue: z.string().optional(),
     lat: z.number().optional(),

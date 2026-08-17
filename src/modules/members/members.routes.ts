@@ -45,9 +45,10 @@ memberRoutes.patch('/me/community-switch', requireAuth, validate(communitySwitch
 // Admin member register list (must precede /:publicId)
 memberRoutes.get('/', requireAuth, requirePermission('MEMBERS', 'VIEW'), membersController.listMembers);
 memberRoutes.post('/admin-create', requireAuth, requirePermission('MEMBERS', 'CREATE'), membersController.adminCreateMember);
-memberRoutes.post('/register/jain', requireAuth, validate(registerJainMemberSchema), membersController.registerJainMember);
-memberRoutes.post('/register/non-jain', requireAuth, validate(registerNonJainMemberSchema), membersController.registerNonJainMember);
+memberRoutes.post('/register/jain', validate(registerJainMemberSchema), membersController.registerJainMember);
+memberRoutes.post('/register/non-jain', validate(registerNonJainMemberSchema), membersController.registerNonJainMember);
 memberRoutes.get('/me', requireAuth, membersController.getMyProfile);
+memberRoutes.get('/me/follows', requireAuth, membersController.getMyFollows);
 memberRoutes.patch('/me', requireAuth, validate(updateMemberProfileSchema), membersController.updateMyProfile);
 
 // ─── Export all members as Excel (must be before /:publicId) ─────────────────

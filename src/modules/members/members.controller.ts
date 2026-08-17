@@ -10,18 +10,37 @@ import { nextPublicId } from '@/engines/idGenerator/id.service';
 import ExcelJS from 'exceljs';
 import { encryptField, hashForLookup } from '@/utils/encryption';
 import { Prisma } from '@prisma/client';
+import { verifyRegistrationToken } from '@/engines/rbac/jwt.service';
+import { issueTokensForUser } from '@/modules/auth/auth.service';
 
 export const registerJainMember = asyncHandler(async (req: Request, res: Response) => {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.actor!.userId } });
-  const member = await membersService.registerMember({ userId: req.actor!.userId, category: 'JAIN', mobile: user.mobile, ...req.body });
-  // Self-registration: user sees their own full mobile back
-  return created(res, serializeMemberFull(member, null, true));
+  const { registrationToken, deviceId, deviceType, os, appVersion } = req.body;
+  if (!registrationToken) throw ApiError.unauthorized('Registration token missing');
+
+  const decoded = verifyRegistrationToken(registrationToken);
+  const member = await membersService.registerMember({ category: 'JAIN', mobile: decoded.mobile, ...req.body });
+
+  const tokens = await issueTokensForUser(
+    { id: member.userId, publicId: member.publicId, primaryRoleKey: 'MEMBER' },
+    { deviceId, deviceType, os, appVersion, ip: req.ip }
+  );
+
+  return created(res, { ...serializeMemberFull(member, null, true), ...tokens });
 });
 
 export const registerNonJainMember = asyncHandler(async (req: Request, res: Response) => {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.actor!.userId } });
-  const member = await membersService.registerMember({ userId: req.actor!.userId, category: 'NON_JAIN', mobile: user.mobile, ...req.body });
-  return created(res, serializeMemberFull(member, null, true));
+  const { registrationToken, deviceId, deviceType, os, appVersion } = req.body;
+  if (!registrationToken) throw ApiError.unauthorized('Registration token missing');
+
+  const decoded = verifyRegistrationToken(registrationToken);
+  const member = await membersService.registerMember({ category: 'NON_JAIN', mobile: decoded.mobile, ...req.body });
+
+  const tokens = await issueTokensForUser(
+    { id: member.userId, publicId: member.publicId, primaryRoleKey: 'NON_JAIN_MEMBER' },
+    { deviceId, deviceType, os, appVersion, ip: req.ip }
+  );
+
+  return created(res, { ...serializeMemberFull(member, null, true), ...tokens });
 });
 
 export const getMyProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -29,6 +48,35 @@ export const getMyProfile = asyncHandler(async (req: Request, res: Response) => 
   if (!member) throw ApiError.notFound('Member profile not found');
   // Own profile — always full
   return ok(res, serializeMemberFull(member, member.privacySetting, true));
+});
+
+export const getMyFollows = asyncHandler(async (req: Request, res: Response) => {
+  const member = await prisma.member.findUnique({
+    where: { userId: req.actor!.userId },
+    include: {
+      organizationFollows: { include: { organization: true } },
+      monkFollows: { include: { monk: true } }
+    }
+  });
+  if (!member) throw ApiError.notFound('Member profile not found');
+  
+  const followedIds: string[] = [];
+  const followedMeta: Record<string, any> = {};
+
+  for (const follow of member.organizationFollows) {
+    if (follow.organization) {
+      followedIds.push(follow.organizationId);
+      followedMeta[follow.organizationId] = { name: follow.organization.name, type: follow.organization.type, publicId: follow.organization.publicId };
+    }
+  }
+  for (const follow of member.monkFollows) {
+    if (follow.monk) {
+      followedIds.push(follow.monkId);
+      followedMeta[follow.monkId] = { name: follow.monk.dikshaName, type: 'MS', publicId: follow.monk.publicId };
+    }
+  }
+
+  return ok(res, { followedIds, followedMeta });
 });
 
 export const updateMyProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -194,7 +242,6 @@ export const adminCreateMember = asyncHandler(async (req: Request, res: Response
   if (category === 'JAIN') {
     if (!motherTongue) errors.motherTongue = ['Required'];
     if (!communityId) errors.communityId = ['Required'];
-    if (!subCommunityId) errors.subCommunityId = ['Required'];
     if (!tithiCalendarTypeId) errors.tithiCalendarTypeId = ['Required'];
   }
 

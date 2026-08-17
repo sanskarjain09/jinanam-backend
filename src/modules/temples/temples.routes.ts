@@ -6,6 +6,7 @@ import {
   createOrganizationSchema, updateOrganizationSchema, addTrusteeSchema,
   addVolunteerSchema, addContactSchema, addDhajaRecordSchema, addReviewSchema,
   replyReviewSchema, addNoticeSchema, addGalleryImageSchema, reportIncorrectInfoSchema,
+  addTempleAnnouncementSchema,
 } from './organizations.dto';
 import { makeOrganizationController, bhojanalayDirectory, orgExtras } from './organizations.controller';
 
@@ -51,6 +52,10 @@ templeRoutes.delete('/reviews/:reviewId', requireAuth, requireRole('SUPER_ADMIN'
 // Notices — add, delete
 templeRoutes.post('/:organizationId/notices', requireAuth, requirePermission('TEMPLES', 'EDIT'), scopeToOrganization, validate(addNoticeSchema), ctrl.addNotice);
 templeRoutes.delete('/:organizationId/notices/:noticeId', requireAuth, requirePermission('TEMPLES', 'EDIT'), scopeToOrganization, extra.deleteNotice);
+
+// Announcements — add, delete
+templeRoutes.post('/:organizationId/announcements', requireAuth, requirePermission('TEMPLES', 'EDIT'), scopeToOrganization, validate(addTempleAnnouncementSchema), ctrl.addAnnouncement);
+templeRoutes.delete('/:organizationId/announcements/:announcementId', requireAuth, requirePermission('TEMPLES', 'EDIT'), scopeToOrganization, extra.deleteAnnouncement);
 
 // Volunteers
 templeRoutes.post('/:organizationId/volunteers', requireAuth, requirePermission('TEMPLES', 'EDIT'), scopeToOrganization, validate(addVolunteerSchema), ctrl.addVolunteer);

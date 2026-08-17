@@ -81,12 +81,13 @@ interface FeedContext {
   city?: string | null;
   state?: string | null;
   country?: string | null;
+  seenPostIds: Set<string>;
 }
 
 async function buildFeedContext(memberId: string): Promise<FeedContext> {
   const member = await prisma.member.findUniqueOrThrow({
     where: { id: memberId },
-    include: { organizationFollows: true, monkFollows: true },
+    include: { organizationFollows: true, monkFollows: true, feedViews: { select: { feedPostId: true } } },
   });
   const address = member.currentAddress as { city?: string; state?: string; country?: string } | null;
   return {
@@ -101,6 +102,7 @@ async function buildFeedContext(memberId: string): Promise<FeedContext> {
     city: address?.city,
     state: address?.state,
     country: address?.country,
+    seenPostIds: new Set(member.feedViews.map((v) => v.feedPostId)),
   };
 }
 
@@ -114,6 +116,10 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 
 function rankPost(post: any, ctx: FeedContext): number {
   const cfg = (post.visibilityConfig ?? {}) as any;
+  let penalty = 0;
+  if (ctx.seenPostIds.has(post.id)) {
+    penalty = 50000; // Push seen posts below all unseen posts
+  }
 
   // Pinned posts (global or local) get highest priority
   if (post.isPinned) {
@@ -122,11 +128,11 @@ function rankPost(post: any, ctx: FeedContext): number {
 
   // P1: followed entities
   if (post.organizationId && ctx.followedOrgIds.has(post.organizationId)) {
-    return computeFeedPriorityRank({ isFollowed: true, isCommunityMatch: false, geoRingIndex: null, isGlobalFallback: false });
+    return penalty + computeFeedPriorityRank({ isFollowed: true, isCommunityMatch: false, geoRingIndex: null, isGlobalFallback: false });
   }
   const cfgMonks: string[] = cfg.followedEntityIds?.monkIds ?? [];
   if (cfgMonks.some((id) => ctx.followedMonkIds.has(id))) {
-    return computeFeedPriorityRank({ isFollowed: true, isCommunityMatch: false, geoRingIndex: null, isGlobalFallback: false });
+    return penalty + computeFeedPriorityRank({ isFollowed: true, isCommunityMatch: false, geoRingIndex: null, isGlobalFallback: false });
   }
 
   // P2: community chain match
@@ -135,7 +141,7 @@ function rankPost(post: any, ctx: FeedContext): number {
     (cfg.community?.subCommunityIds?.includes(ctx.subCommunityId) && ctx.subCommunityId) ||
     (cfg.community?.communityIds?.includes(ctx.communityId) && ctx.communityId);
   if (communityMatch) {
-    return computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: true, geoRingIndex: null, isGlobalFallback: false });
+    return penalty + computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: true, geoRingIndex: null, isGlobalFallback: false });
   }
 
   // P3: geographic rings
@@ -143,20 +149,20 @@ function rankPost(post: any, ctx: FeedContext): number {
     const distance = haversineKm(ctx.lat, ctx.lng, cfg.geo.centerLat, cfg.geo.centerLng);
     for (let ring = 0; ring < GEO_EXPANSION_RINGS_KM.length; ring += 1) {
       if (distance <= GEO_EXPANSION_RINGS_KM[ring]!) {
-        return computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: ring + 1, isGlobalFallback: false });
+        return penalty + computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: ring + 1, isGlobalFallback: false });
       }
     }
   }
-  if (cfg.geo?.city && cfg.geo.city === ctx.city) return computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: 4, isGlobalFallback: false });
-  if (cfg.geo?.state && cfg.geo.state === ctx.state) return computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: 6, isGlobalFallback: false });
-  if (cfg.geo?.country && cfg.geo.country === ctx.country) return computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: 7, isGlobalFallback: false });
+  if (cfg.geo?.city && cfg.geo.city === ctx.city) return penalty + computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: 4, isGlobalFallback: false });
+  if (cfg.geo?.state && cfg.geo.state === ctx.state) return penalty + computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: 6, isGlobalFallback: false });
+  if (cfg.geo?.country && cfg.geo.country === ctx.country) return penalty + computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: 7, isGlobalFallback: false });
 
   // P4: global fallback
-  if (cfg.isPublic || !post.organizationId) {
-    return computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: null, isGlobalFallback: true });
+  if (cfg.isPublic || (post.organizationId === null && post.authorId === null)) {
+    return penalty + computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: null, isGlobalFallback: true });
   }
 
-  return 99999; // not eligible — filtered out below
+  return penalty + 99999; // not eligible — filtered out below
 }
 
 export async function getSmartFeed(
@@ -252,7 +258,7 @@ export async function getSmartFeed(
             (cfg.community?.communityIds?.includes(ctx.communityId) && ctx.communityId);
           return !!communityMatch;
         }
-        if (key === 'events') return post.category?.name === 'Events';
+        if (key === 'events') return post.sourceModule === 'EVENTS' || post.category?.name === 'Events';
         if (key === 'tours') return post.category?.name === 'Tours';
         if (key === 'notices') return post.category?.name === 'Notices';
         if (key === 'offers') return post.category?.name === 'Offers & Benefits';
@@ -272,14 +278,29 @@ export async function getSmartFeed(
   const start = (page - 1) * pageSize;
   const pageRows = ranked.slice(start, start + pageSize).map((r) => r.post);
 
-  // Auto track analytics: increment view counts for these posts asynchronously
+  // Fetch seen and liked status for the page rows
+  let viewMap = new Set<string>();
+  let likeMap = new Set<string>();
+  let saveMap = new Set<string>();
   if (pageRows.length > 0) {
-    prisma.feedPost
-      .updateMany({
-        where: { id: { in: pageRows.map((r) => r.id) } },
-        data: { viewCount: { increment: 1 } },
+    const postIds = pageRows.map((r) => r.id);
+    const [views, likes, saves] = await Promise.all([
+      prisma.feedPostView.findMany({
+        where: { memberId, feedPostId: { in: postIds } },
+        select: { feedPostId: true },
+      }),
+      prisma.feedPostLike.findMany({
+        where: { memberId, feedPostId: { in: postIds } },
+        select: { feedPostId: true },
+      }),
+      prisma.feedPostSave.findMany({
+        where: { memberId, feedPostId: { in: postIds } },
+        select: { feedPostId: true },
       })
-      .catch((err) => console.error('Failed to update feed post view counts:', err));
+    ]);
+    viewMap = new Set(views.map((v) => v.feedPostId));
+    likeMap = new Set(likes.map((l) => l.feedPostId));
+    saveMap = new Set(saves.map((s) => s.feedPostId));
   }
 
   // Ads in feed (§5.13): top banner + in-feed after every 7 posts
@@ -290,7 +311,9 @@ export async function getSmartFeed(
   const items: any[] = [];
   let adIndex = 0;
   pageRows.forEach((post, i) => {
-    items.push({ kind: 'POST', post });
+    // Attach hasSeen, liked, and bookmarked status to post
+    const postWithMeta = { ...post, hasSeen: viewMap.has(post.id), liked: likeMap.has(post.id), bookmarked: saveMap.has(post.id) };
+    items.push({ kind: 'POST', post: postWithMeta });
     if ((i + 1) % 7 === 0 && inFeedAds.length > 0) {
       items.push({ kind: 'AD', ad: inFeedAds[adIndex % inFeedAds.length] });
       adIndex += 1;

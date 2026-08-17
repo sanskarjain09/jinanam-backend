@@ -1,5 +1,6 @@
 import { Express, Router } from 'express';
 import { env } from '@/config/env';
+import { bhojanshalaRoutes } from '@/modules/bhojanshala/bhojanshala.routes';
 import { authRoutes } from '@/modules/auth/auth.routes';
 import { memberRoutes } from '@/modules/members/members.routes';
 import { familyRoutes } from '@/modules/family/family.routes';
@@ -7,6 +8,7 @@ import { monkRoutes } from '@/modules/monks/monks.routes';
 import { templeRoutes } from '@/modules/temples/temples.routes';
 import { jainCenterRoutes } from '@/modules/jainCenters/jainCenters.routes';
 import { dharamshalaRoutes } from '@/modules/dharamshalas/dharamshalas.routes';
+import { pathshalaRoutes } from '@/modules/pathshala/pathshala.routes';
 import { staffRoutes } from '@/modules/staff/staff.routes';
 import { visitorRoutes } from '@/modules/visitors/visitors.routes';
 import { bookingRoutes } from '@/modules/bookings/bookings.routes';
@@ -71,6 +73,8 @@ export function registerRoutes(app: Express) {
   v1.use('/seating', seatingRoutes);
   v1.use('/tours', tourRoutes);
   v1.use('/feed', feedRoutes);
+  v1.use('/pathshala', pathshalaRoutes);
+  v1.use('/bhojanshala', bhojanshalaRoutes);
   v1.use('/offers', offerRoutes);
   v1.use('/ads', adRoutes);
   v1.use('/news', newsRoutes);

@@ -32,7 +32,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 
   if (err instanceof ApiError) {
     if (err.status >= 500) {
-      logger.error({ err, path: req.originalUrl }, err.message);
+      logger.error({ err, path: req.originalUrl }, err.message); require("fs").appendFileSync("error.log", err.stack + "\n\n");
     }
     return res.status(err.status).json({
       success: false,
