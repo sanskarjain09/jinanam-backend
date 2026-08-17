@@ -6,6 +6,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   API_BASE_PATH: z.string().default('/api/v1'),
   APP_NAME: z.string().default('JiNANAM'),
+  APP_URL: z.string().optional().default(''),
   // §74: base domain for shareable deep links (e.g. https://jinanam.app/event/JNEV000154)
   APP_DEEP_LINK_BASE_URL: z.string().default('https://jinanam.app'),
 

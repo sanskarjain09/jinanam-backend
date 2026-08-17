@@ -10,7 +10,14 @@ export const swaggerSpec = swaggerJSDoc({
       description:
         'Multi-tenant Jain community platform backend — monk tracking, temples, dharamshalas, bookings, donations, events/ticketing, feed, visitors, staff, yatra tours.',
     },
-    servers: [{ url: `http://localhost:${env.PORT}${env.API_BASE_PATH}` }],
+    servers: [
+      {
+        url: env.NODE_ENV === 'production' && env.APP_URL
+          ? `${env.APP_URL}${env.API_BASE_PATH}`
+          : `http://localhost:${env.PORT}${env.API_BASE_PATH}`,
+        description: env.NODE_ENV === 'production' ? 'Production' : 'Local Development',
+      },
+    ],
     components: {
       securitySchemes: {
         bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
