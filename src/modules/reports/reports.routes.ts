@@ -199,7 +199,7 @@ const REPORTS: Record<ReportKey, ReportDef> = {
       });
       return rows.map((r) => ({
         route: r.route.name,
-        monk: `${r.monk.dikshaName} (${r.monk.publicId})`,
+        monk: r.monk ? `${r.monk.dikshaName} (${r.monk.publicId})` : 'Group Journey',
         status: r.status,
         startedAt: r.startedAt.toISOString(),
         completedAt: r.completedAt?.toISOString() ?? '',

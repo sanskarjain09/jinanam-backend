@@ -165,7 +165,7 @@ export async function recordJourneyEvent(journeyId: string, input: { type: 'DEPA
     await raiseAlert({
       type: 'ROUTE_DELAY',
       severity: 'WARNING',
-      monkId: journey.monkId,
+      monkId: journey.monkId ?? undefined,
       message: `Route "${journey.route.name}" delayed at stop ${stops[idx]?.templeName ?? journey.currentStopIndex}${input.note ? `: ${input.note}` : ''}`,
       dedupeKey: `delay-${journeyId}-${journey.currentStopIndex}`,
     });
@@ -184,7 +184,7 @@ export async function listJourneys() {
   return prisma.journey.findMany({
     include: {
       monk: { select: { publicId: true, dikshaName: true, photoUrl: true } },
-      monkGroup: { select: { id: true, name: true, leaderMonk: { select: { dikshaName: true } } } },
+      monkGroup: { select: { id: true, name: true, leaderMonkId: true } },
       route: { select: { name: true, journeyDate: true, stops: true } },
     },
     orderBy: { startedAt: 'desc' },
