@@ -127,7 +127,6 @@ async function enrichPlans<T extends { monkIds: unknown; sponsorIds: unknown; st
 chaturmasRoutes.get(
   '/org/:organizationId',
   requireAuth,
-  scopeToOrganization,
   asyncHandler(async (req: Request, res: Response) => {
     const { organizationId } = req.params;
     const rows = await prisma.chaturmasPlan.findMany({

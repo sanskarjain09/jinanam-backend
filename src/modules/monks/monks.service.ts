@@ -150,16 +150,73 @@ export async function getMonk(monkId: string) {
     where: { OR: [{ id: monkId }, { publicId: monkId }], deletedAt: null },
     include: {
       dikshaGuru: { select: { id: true, publicId: true, dikshaName: true, photoUrl: true } },
+      discipleOf: { select: { id: true, publicId: true, dikshaName: true, photoUrl: true } },
       currentTemple: { select: { id: true, publicId: true, name: true, city: true } },
-      group: { include: { members: { select: { id: true, publicId: true, dikshaName: true } } } },
+      group: {
+        include: {
+          members: { select: { id: true, publicId: true, dikshaName: true, photoUrl: true } },
+        },
+      },
       community: true,
       subCommunity: true,
       gaccha: true,
+      _count: { select: { follows: true } },
     },
   });
   if (!monk) throw ApiError.notFound('Monk profile not found');
-  return monk;
+
+  // Fetch active journey (if monk is currently Moving on a route)
+  const activeJourney = await prisma.journey.findFirst({
+    where: { monkId: monk.id, status: 'IN_PROGRESS' },
+    include: {
+      route: { select: { name: true, stops: true, journeyDate: true } },
+    },
+    orderBy: { startedAt: 'desc' },
+  });
+
+  // Fetch active/current Chaturmas plan (started, not yet ended)
+  const now = new Date();
+  const activeChaturmas = await prisma.chaturmasPlan.findFirst({
+    where: {
+      deletedAt: null,
+      AND: [
+        { startDate: { lte: now } },
+        { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+        { OR: [{ monkId: monk.id }, { monkIds: { array_contains: monk.id } }] },
+      ],
+    },
+    include: {
+      organization: { select: { id: true, name: true, city: true, state: true, publicId: true } },
+    },
+    orderBy: { startDate: 'desc' },
+  });
+
+  return {
+    ...monk,
+    activeJourney: activeJourney
+      ? {
+          id: activeJourney.id,
+          routeName: activeJourney.route.name,
+          stops: activeJourney.route.stops,
+          journeyDate: activeJourney.route.journeyDate,
+          currentStopIndex: activeJourney.currentStopIndex,
+        }
+      : null,
+    activeChaturmas: activeChaturmas
+      ? {
+          id: activeChaturmas.id,
+          year: activeChaturmas.year,
+          startDate: activeChaturmas.startDate,
+          endDate: activeChaturmas.endDate,
+          orgName: activeChaturmas.organization?.name ?? null,
+          city: activeChaturmas.organization?.city ?? null,
+          state: activeChaturmas.organization?.state ?? null,
+        }
+      : null,
+  };
 }
+
+
 
 export async function listMonks(filters: { templeId?: string; groupId?: string; gender?: 'SADHU' | 'SADHVI'; search?: string }) {
   return prisma.monkProfile.findMany({
@@ -182,7 +239,10 @@ export async function listMonks(filters: { templeId?: string; groupId?: string; 
           }
         : {}),
     },
-    include: { currentTemple: { select: { id: true, publicId: true, name: true, city: true } } },
+    include: { 
+      currentTemple: { select: { id: true, publicId: true, name: true, city: true } },
+      _count: { select: { follows: true } },
+    },
     orderBy: { dikshaName: 'asc' },
   });
 }

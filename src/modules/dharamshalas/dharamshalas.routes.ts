@@ -4,7 +4,7 @@ import { validate } from '@/middlewares/validate';
 import multer from 'multer';
 import {
   createOrganizationSchema, updateOrganizationSchema, addTrusteeSchema,
-  addContactSchema, addReviewSchema, replyReviewSchema, addNoticeSchema,
+  addContactSchema, addReviewSchema, replyReviewSchema, publishReviewSchema, addNoticeSchema,
   addGalleryImageSchema, reportIncorrectInfoSchema, addDhajaRecordSchema,
 } from '@/modules/temples/organizations.dto';
 import { makeOrganizationController, orgExtras } from '@/modules/temples/organizations.controller';
@@ -46,6 +46,7 @@ dharamshalaRoutes.delete('/:organizationId/dhaja/:dhajaId', requireAuth, require
 // Reviews
 dharamshalaRoutes.post('/:organizationId/reviews', requireAuth, validate(addReviewSchema), ctrl.addReview);
 dharamshalaRoutes.patch('/reviews/:reviewId/reply', requireAuth, requirePermission('DHARAMSHALAS', 'EDIT'), validate(replyReviewSchema), ctrl.replyReview);
+dharamshalaRoutes.patch('/reviews/:reviewId/publish', requireAuth, requirePermission('DHARAMSHALAS', 'EDIT'), validate(publishReviewSchema), ctrl.publishReview);
 dharamshalaRoutes.delete('/reviews/:reviewId', requireAuth, requireRole('SUPER_ADMIN'), ctrl.hideReview);
 
 // Notices

@@ -10,6 +10,7 @@ import {
   addDhajaRecordSchema,
   addReviewSchema,
   replyReviewSchema,
+  publishReviewSchema,
   addNoticeSchema,
   addGalleryImageSchema,
   reportIncorrectInfoSchema,
@@ -33,6 +34,7 @@ jainCenterRoutes.post('/:organizationId/dhaja', requireAuth, requirePermission('
 jainCenterRoutes.patch('/:organizationId/dhaja/:dhajaRecordId', requireAuth, requirePermission('JAIN_CENTERS', 'EDIT'), scopeToOrganization, validate(addDhajaRecordSchema), ctrl.updateDhajaRecord);
 jainCenterRoutes.post('/:organizationId/reviews', requireAuth, validate(addReviewSchema), ctrl.addReview);
 jainCenterRoutes.patch('/reviews/:reviewId/reply', requireAuth, requirePermission('JAIN_CENTERS', 'EDIT'), validate(replyReviewSchema), ctrl.replyReview);
+jainCenterRoutes.patch('/reviews/:reviewId/publish', requireAuth, requirePermission('JAIN_CENTERS', 'EDIT'), validate(publishReviewSchema), ctrl.publishReview);
 jainCenterRoutes.delete('/reviews/:reviewId', requireAuth, requireRole('SUPER_ADMIN'), ctrl.hideReview);
 jainCenterRoutes.post('/:organizationId/notices', requireAuth, requirePermission('JAIN_CENTERS', 'EDIT'), scopeToOrganization, validate(addNoticeSchema), ctrl.addNotice);
 jainCenterRoutes.post('/:organizationId/follow', requireAuth, ctrl.follow);

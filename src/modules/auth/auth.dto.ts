@@ -85,6 +85,7 @@ export const createAdminAccountSchema = z.object({
     role: z.enum(['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'STAFF', 'SUB_ADMIN', 'BHOJANSHALA_ADMIN']),
     organizationIds: z.array(z.string()),
     modules: z.array(z.string()).optional(),
+    permissionLevel: z.enum(['READ', 'READ_WRITE']).optional(),
   }).superRefine((val, ctx) => {
     if (val.role !== 'MONK_ADMIN' && (!val.organizationIds || val.organizationIds.length === 0)) {
       ctx.addIssue({

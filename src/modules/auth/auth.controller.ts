@@ -150,8 +150,8 @@ export const myModules = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const createAdminAccount = asyncHandler(async (req: Request, res: Response) => {
-  const { modules, ...rest } = req.body;
-  const result = await adminAccountsService.createAdminAccount({ ...rest, grantedModules: modules, createdById: req.actor!.userId });
+  const { modules, permissionLevel, ...rest } = req.body;
+  const result = await adminAccountsService.createAdminAccount({ ...rest, grantedModules: modules, permissionLevel, createdById: req.actor!.userId });
   await recordAudit({
     ...auditContextFromRequest(req),
     module: 'SETTINGS',
@@ -247,6 +247,12 @@ export const listAdmins = asyncHandler(async (req: Request, res: Response) => {
   );
 
   return ok(res, withModules);
+});
+
+export const listOrgAdmins = asyncHandler(async (req: Request, res: Response) => {
+  const orgId = req.params.orgId as string;
+  const admins = await adminAccountsService.listOrgAdmins(orgId);
+  return ok(res, admins);
 });
 
 export const deleteAdminAccount = asyncHandler(async (req: Request, res: Response) => {

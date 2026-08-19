@@ -118,28 +118,42 @@ export const getMemberByPublicId = asyncHandler(async (req: Request, res: Respon
 });
 
 export const addFamilyMember = asyncHandler(async (req: Request, res: Response) => {
-  let member = await membersService.getMemberByUserId(req.actor!.userId);
+  let member;
 
-  // Super Admin may not have a Member profile (they're platform-level, not org-level).
-  // Auto-create a stub so they can use member-facing features like Family.
-  if (!member && req.actor!.isSuperAdmin) {
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: req.actor!.userId } });
-    const publicId = await nextPublicId('JAIN_MEMBER');
-    const firstName = user.firstName || 'Super';
-    const surname = user.lastName || 'Admin';
-    member = await prisma.member.create({
-      data: {
-        userId: user.id,
-        publicId,
-        category: 'NON_JAIN',
-        firstName,
-        surname,
-        fullName: `${firstName} ${surname}`.trim(),
-        mobile: user.mobile,
-        mobileVerifiedAt: new Date(),
-        status: 'ACTIVE',
-      },
-    }) as any;
+  if (req.body.anchorMemberPublicId) {
+    member = await membersService.getMemberByPublicId(req.body.anchorMemberPublicId);
+    if (!member) throw ApiError.notFound('Anchor member not found');
+
+    const isSelf = member.userId === req.actor!.userId;
+    const isPrivileged = req.actor!.isSuperAdmin || (req.actor!.permissions.FAMILY ?? []).includes('CREATE');
+    
+    if (!isSelf && !isPrivileged) {
+      throw ApiError.forbidden('Cannot add family member to another user');
+    }
+  } else {
+    member = await membersService.getMemberByUserId(req.actor!.userId);
+
+    // Super Admin may not have a Member profile (they're platform-level, not org-level).
+    // Auto-create a stub so they can use member-facing features like Family.
+    if (!member && req.actor!.isSuperAdmin) {
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: req.actor!.userId } });
+      const publicId = await nextPublicId('JAIN_MEMBER');
+      const firstName = user.firstName || 'Super';
+      const surname = user.lastName || 'Admin';
+      member = await prisma.member.create({
+        data: {
+          userId: user.id,
+          publicId,
+          category: 'NON_JAIN',
+          firstName,
+          surname,
+          fullName: `${firstName} ${surname}`.trim(),
+          mobile: user.mobile,
+          mobileVerifiedAt: new Date(),
+          status: 'ACTIVE',
+        },
+      }) as any;
+    }
   }
 
   if (!member) throw ApiError.notFound('Member profile not found');
@@ -149,6 +163,16 @@ export const addFamilyMember = asyncHandler(async (req: Request, res: Response) 
 
 /** Admin/Super Admin links two already-existing members as family directly by public ID. */
 export const linkFamilyMembers = asyncHandler(async (req: Request, res: Response) => {
+  const member = await membersService.getMemberByPublicId(req.body.primaryMemberPublicId);
+  if (!member) throw ApiError.notFound('Primary member not found');
+
+  const isSelf = member.userId === req.actor!.userId;
+  const isPrivileged = req.actor!.isSuperAdmin || (req.actor!.permissions.FAMILY ?? []).includes('CREATE');
+
+  if (!isSelf && !isPrivileged) {
+    throw ApiError.forbidden('Cannot link members for another user');
+  }
+
   const link = await membersService.linkExistingFamilyMembers(req.body);
   await recordAudit({
     ...auditContextFromRequest(req),
@@ -357,7 +381,7 @@ export const adminCreateMember = asyncHandler(async (req: Request, res: Response
 /** Admin member register list (MEMBERS:VIEW) — paginated, searchable by name/mobile/publicId. */
 export const listMembers = asyncHandler(async (req: Request, res: Response) => {
   const {
-    q, category, status, excludeStaff, createdByUserId,
+    q, category, status, excludeStaff, createdByUserId, createdByOrgId,
     page = '1', pageSize = '20',
   } = req.query as Record<string, string>;
   const take = Math.min(parseInt(pageSize) || 20, 100);
@@ -372,11 +396,35 @@ export const listMembers = asyncHandler(async (req: Request, res: Response) => {
   // the response.
   const actor = req.actor!;
   if (!actor.isSuperAdmin) {
-    // If the caller explicitly asked to be scoped to their own createdByUserId,
-    // honour that. Otherwise default to their own userId — safer than leaking
-    // the full roster to a delegated admin.
-    const scopedTo = createdByUserId || actor.userId;
-    where.createdById = scopedTo;
+    // 1. Find all organizations the actor belongs to
+    const myOrgs = await prisma.userOrganization.findMany({
+      where: { userId: actor.userId },
+      select: { organizationId: true }
+    });
+    const myOrgIds = myOrgs.map(o => o.organizationId);
+
+    if (myOrgIds.length > 0) {
+      // 2. Find all users (Admins & Staff) in these organizations
+      const [orgAdmins, orgStaff] = await Promise.all([
+        prisma.userOrganization.findMany({
+          where: { organizationId: { in: myOrgIds } },
+          select: { userId: true }
+        }),
+        prisma.staff.findMany({
+          where: { organizationId: { in: myOrgIds }, deletedAt: null },
+          select: { userId: true }
+        })
+      ]);
+      const validCreatorIds = [...new Set([
+        ...orgAdmins.map(a => a.userId),
+        ...orgStaff.map(s => s.userId),
+        actor.userId
+      ])];
+      where.createdById = { in: validCreatorIds };
+    } else {
+      const scopedTo = createdByUserId || actor.userId;
+      where.createdById = scopedTo;
+    }
   }
 
   // Category filter

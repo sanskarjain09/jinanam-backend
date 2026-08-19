@@ -5,7 +5,7 @@ import multer from 'multer';
 import {
   createOrganizationSchema, updateOrganizationSchema, addTrusteeSchema,
   addVolunteerSchema, addContactSchema, addDhajaRecordSchema, addReviewSchema,
-  replyReviewSchema, addNoticeSchema, addGalleryImageSchema, reportIncorrectInfoSchema,
+  replyReviewSchema, publishReviewSchema, addNoticeSchema, addGalleryImageSchema, reportIncorrectInfoSchema,
   addTempleAnnouncementSchema,
 } from './organizations.dto';
 import { makeOrganizationController, bhojanalayDirectory, orgExtras } from './organizations.controller';
@@ -47,6 +47,7 @@ templeRoutes.delete('/:organizationId/dhaja/:dhajaId', requireAuth, requirePermi
 // Reviews — add, reply, delete
 templeRoutes.post('/:organizationId/reviews', requireAuth, validate(addReviewSchema), ctrl.addReview);
 templeRoutes.patch('/reviews/:reviewId/reply', requireAuth, requirePermission('TEMPLES', 'EDIT'), validate(replyReviewSchema), ctrl.replyReview);
+templeRoutes.patch('/reviews/:reviewId/publish', requireAuth, requirePermission('TEMPLES', 'EDIT'), validate(publishReviewSchema), ctrl.publishReview);
 templeRoutes.delete('/reviews/:reviewId', requireAuth, requireRole('SUPER_ADMIN'), ctrl.hideReview);
 
 // Notices — add, delete

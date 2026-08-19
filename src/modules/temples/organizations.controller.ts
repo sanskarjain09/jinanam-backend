@@ -75,6 +75,11 @@ export const makeOrganizationController = (type: OrganizationType) => ({
     return ok(res, row);
   }),
 
+  publishReview: asyncHandler(async (req: Request, res: Response) => {
+    const row = await orgService.publishReview(req.params.reviewId as string, req.body.isPublished);
+    return ok(res, row);
+  }),
+
   hideReview: asyncHandler(async (req: Request, res: Response) => {
     const row = await orgService.hideReview(req.params.reviewId as string, req.actor!.userId);
     await recordAudit({ ...auditContextFromRequest(req), module: type, action: 'DELETE', entityType: 'OrganizationReview', entityId: req.params.reviewId as string, isCritical: true });

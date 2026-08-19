@@ -121,6 +121,8 @@ export const addFamilyMemberSchema = z.object({
     relationshipTypeId: z.string().min(1),
     mobile: z.string().min(8),
     category: z.enum(['JAIN', 'NON_JAIN']).default('JAIN'),
+    anchorMemberPublicId: z.string().optional(),
+    organizationId: z.string().optional(),
   }),
 });
 

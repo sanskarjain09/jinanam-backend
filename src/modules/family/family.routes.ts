@@ -19,8 +19,8 @@ familyRoutes.post('/', requireAuth, validate(addFamilyMemberSchema), addFamilyMe
 /** Admin-wide family group directory (all members, not just the caller's own). */
 familyRoutes.get('/', requireAuth, requirePermission('FAMILY', 'VIEW'), listAllFamilyGroups);
 
-/** Admin/Super Admin links two already-existing members as family, by public ID. */
-familyRoutes.post('/link', requireAuth, requirePermission('FAMILY', 'CREATE'), validate(linkFamilyMembersSchema), linkFamilyMembers);
+/** Admin/Super Admin links two already-existing members as family, by public ID. Or normal member linking their own. */
+familyRoutes.post('/link', requireAuth, validate(linkFamilyMembersSchema), linkFamilyMembers);
 
 /** My family links (both directions). Members without a profile (e.g. Super Admin) get an empty list. */
 familyRoutes.get(

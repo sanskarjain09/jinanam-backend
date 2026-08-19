@@ -692,6 +692,7 @@ model OrganizationReview {
   rating         Int
   comment        String?
   adminReply     String?
+  isPublished    Boolean      @default(false)
   isHidden       Boolean      @default(false)
   createdAt      DateTime     @default(now())
   deletedAt      DateTime?

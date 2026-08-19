@@ -29,6 +29,7 @@ export async function createOrganization(input: Record<string, unknown> & { type
     'parentOrganizationId', 'tithiCalendarTypeId', 'createdById', 'updatedById',
   ];
   const cleanedRest = { ...rest };
+  console.log("UPDATE ORG CALLED WITH REST:", rest);
   for (const field of FK_RELATION_FIELDS) {
     if (Object.prototype.hasOwnProperty.call(cleanedRest, field) && cleanedRest[field] === '') {
       cleanedRest[field] = null;
@@ -251,6 +252,7 @@ export async function updateOrganization(organizationId: string, input: Record<s
     'parentOrganizationId', 'tithiCalendarTypeId', 'createdById', 'updatedById',
   ];
   const cleanedRest = { ...rest };
+  console.log("UPDATE ORG CALLED WITH REST:", rest);
   for (const field of FK_RELATION_FIELDS) {
     if (Object.prototype.hasOwnProperty.call(cleanedRest, field) && cleanedRest[field] === '') {
       cleanedRest[field] = null; // null disconnects the relation safely
@@ -284,6 +286,7 @@ export async function getOrganization(organizationId: string) {
       trustees: { include: { member: true } },
       volunteers: { include: { member: true } },
       contacts: { include: { member: true } },
+      reviews: { where: { deletedAt: null }, include: { member: true }, orderBy: { createdAt: 'desc' } },
       historyEvents: true,
       dhajaRecords: { orderBy: { year: 'desc' } },
       notices: {
@@ -535,6 +538,12 @@ export async function replyToReview(reviewId: string, adminReply: string) {
   return prisma.organizationReview.update({ where: { id: reviewId }, data: { adminReply } });
 }
 
+export async function publishReview(reviewId: string, isPublished: boolean) {
+  const review = await prisma.organizationReview.update({ where: { id: reviewId }, data: { isPublished } });
+  await recomputeAvgRating(review.organizationId);
+  return review;
+}
+
 export async function hideReview(reviewId: string, hiddenById: string) {
   const review = await prisma.organizationReview.update({ where: { id: reviewId }, data: { isHidden: true, deletedById: hiddenById } });
   await recomputeAvgRating(review.organizationId);
@@ -543,7 +552,7 @@ export async function hideReview(reviewId: string, hiddenById: string) {
 
 async function recomputeAvgRating(organizationId: string) {
   const agg = await prisma.organizationReview.aggregate({
-    where: { organizationId, isHidden: false, deletedAt: null },
+    where: { organizationId, isHidden: false, isPublished: true, deletedAt: null },
     _avg: { rating: true },
   });
   await prisma.organization.update({ where: { id: organizationId }, data: { avgRating: agg._avg.rating ?? 0 } });

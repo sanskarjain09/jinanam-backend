@@ -26,6 +26,7 @@ export async function createAdminAccount(input: {
   organizationIds: string[];
   createdById: string;
   grantedModules?: string[];
+  permissionLevel?: 'READ' | 'READ_WRITE';
 }) {
   if (!ADMIN_ROLES.includes(input.role)) throw ApiError.validation({ role: ['Must be one of ' + ADMIN_ROLES.join(', ')] });
 
@@ -75,7 +76,13 @@ export async function createAdminAccount(input: {
   }
 
   if (modulesToGrant && modulesToGrant.length > 0) {
-    await setAdminModuleGrants(user.id, modulesToGrant, input.createdById);
+    if (input.permissionLevel && input.organizationIds.length > 0) {
+      for (const orgId of input.organizationIds) {
+        await setOrgScopedAdminModuleGrants(user.id, orgId, modulesToGrant, input.permissionLevel, input.createdById);
+      }
+    } else {
+      await setAdminModuleGrants(user.id, modulesToGrant, input.createdById);
+    }
   }
 
   await enqueueNotification({
@@ -138,6 +145,32 @@ export async function setAdminModuleGrants(targetUserId: string, grantedModules:
   return prisma.userPermissionOverride.findMany({ where: { userId: targetUserId, organizationId: null } });
 }
 
+export async function setOrgScopedAdminModuleGrants(targetUserId: string, organizationId: string, grantedModules: string[], permissionLevel: 'READ' | 'READ_WRITE', actingSuperAdminId: string) {
+  const target = await prisma.user.findUniqueOrThrow({ where: { id: targetUserId } });
+  if (!ADMIN_ROLES.includes(target.primaryRoleKey)) {
+    throw ApiError.validation({ userId: ['Target user is not an admin account'] });
+  }
+
+  const allowedActionsForRead = ['VIEW'];
+  const allowedActionsForReadWrite = ['VIEW', 'CREATE', 'EDIT', 'APPROVE', 'REJECT'];
+  const grantActions = permissionLevel === 'READ' ? allowedActionsForRead : allowedActionsForReadWrite;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.userPermissionOverride.deleteMany({ where: { userId: targetUserId, organizationId, module: { in: grantedModules } } });
+
+    const rows: Prisma.UserPermissionOverrideCreateManyInput[] = [];
+    for (const module of grantedModules) {
+      for (const action of GRANTABLE_ACTIONS) {
+        const allowed = grantActions.includes(action);
+        rows.push({ userId: targetUserId, organizationId, module, action, allowed, createdById: actingSuperAdminId });
+      }
+    }
+    await tx.userPermissionOverride.createMany({ data: rows });
+  });
+
+  return prisma.userPermissionOverride.findMany({ where: { userId: targetUserId, organizationId } });
+}
+
 /**
  * §A8/A9: Super Admin can deactivate/reactivate an Admin without deleting the
  * account. INACTIVE blocks both future logins (auth.service login checks) and
@@ -174,4 +207,57 @@ export async function assignAdminToOrganizations(userId: string, organizationIds
     });
   }
   return prisma.userOrganization.findMany({ where: { userId } });
+}
+
+export async function listOrgAdmins(organizationId: string) {
+  const admins = await prisma.user.findMany({
+    where: {
+      deletedAt: null,
+      primaryRoleKey: { in: ADMIN_ROLES },
+      userOrganizations: {
+        some: { organizationId }
+      }
+    },
+    select: {
+      id: true,
+      publicId: true,
+      mobile: true,
+      firstName: true,
+      lastName: true,
+      primaryRoleKey: true,
+      status: true,
+      permissionOverrides: {
+        where: { organizationId }
+      }
+    }
+  });
+
+  return admins.map(admin => {
+    const modules: Record<string, 'READ' | 'READ_WRITE'> = {};
+    const moduleActions: Record<string, Set<string>> = {};
+
+    for (const po of admin.permissionOverrides) {
+      if (!moduleActions[po.module]) moduleActions[po.module] = new Set();
+      if (po.allowed) moduleActions[po.module]?.add(po.action);
+    }
+
+    for (const [module, actions] of Object.entries(moduleActions)) {
+      if (actions.has('CREATE') || actions.has('EDIT')) {
+        modules[module] = 'READ_WRITE';
+      } else if (actions.has('VIEW')) {
+        modules[module] = 'READ';
+      }
+    }
+
+    return {
+      id: admin.id,
+      publicId: admin.publicId,
+      mobile: admin.mobile,
+      firstName: admin.firstName,
+      lastName: admin.lastName,
+      primaryRoleKey: admin.primaryRoleKey,
+      status: admin.status,
+      modules
+    };
+  });
 }

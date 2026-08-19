@@ -28,6 +28,10 @@ export const createOrganizationSchema = z.object({
     googleMapsLink: z.string().optional(),
     facilities: z.array(z.string()).optional(),
     activeModules: z.array(z.string()).optional(),
+    staffWorkingHoursStart: z.string().optional(),
+    staffWorkingHoursEnd: z.string().optional(),
+    staffLateArrivalAfter: z.string().optional(),
+    staffEarlyExitBefore: z.string().optional(),
     hasDharamshala: z.boolean().optional(),
     dharamshalaPublished: z.boolean().optional(),
     hasPathshala: z.boolean().optional(),
@@ -169,6 +173,7 @@ export const addDhajaRecordSchema = z.object({
 
 export const addReviewSchema = z.object({ body: z.object({ rating: z.number().int().min(1).max(5), comment: z.string().optional() }) });
 export const replyReviewSchema = z.object({ body: z.object({ adminReply: z.string().min(1) }) });
+export const publishReviewSchema = z.object({ body: z.object({ isPublished: z.boolean() }) });
 
 export const addNoticeSchema = z.object({
   body: z.object({

@@ -51,6 +51,7 @@ authRoutes.get('/me/modules', requireAuth, authController.myModules);
 
 // Admin account management — Super Admin only (§3, §5.1)
 authRoutes.get('/admins', requireAuth, requireRole('SUPER_ADMIN'), authController.listAdmins);
+authRoutes.get('/admins/org/:orgId', requireAuth, requireRole('SUPER_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'BHOJANSHALA_ADMIN', 'JAIN_CENTER_ADMIN'), authController.listOrgAdmins);
 authRoutes.post('/admins', requireAuth, requireRole('SUPER_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'BHOJANSHALA_ADMIN', 'JAIN_CENTER_ADMIN'), validate(createAdminAccountSchema), authController.createAdminAccount);
 authRoutes.patch('/admins/:userId/organizations', requireAuth, requireRole('SUPER_ADMIN'), validate(assignAdminOrgsSchema), authController.assignAdminOrganizations);
 authRoutes.put('/admins/:userId/modules', requireAuth, requireRole('SUPER_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'BHOJANSHALA_ADMIN', 'JAIN_CENTER_ADMIN'), validate(updateAdminModulesSchema), authController.updateAdminModules);
