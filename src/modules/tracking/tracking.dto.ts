@@ -3,7 +3,8 @@ import { z } from 'zod';
 export const createRouteSchema = z.object({
   body: z.object({
     name: z.string().min(1),
-    monkId: z.string().min(1),
+    monkId: z.string().optional(),
+    monkGroupId: z.string().optional(),
     journeyDate: z.coerce.date(),
     stops: z
       .array(

@@ -283,6 +283,77 @@ export async function createMonkGroup(input: {
   });
 }
 
+export async function listMonkGroups() {
+  return prisma.monkGroup.findMany({
+    where: { deletedAt: null },
+    include: {
+      members: { select: { id: true, dikshaName: true, publicId: true, photoUrl: true } },
+    },
+    orderBy: { name: 'asc' },
+  });
+}
+
+export async function updateMonkGroup(groupId: string, input: {
+  name?: string;
+  leaderMonkId?: string;
+  memberMonkIds?: string[];
+  jainMembers?: any;
+  nonJainMembers?: any;
+  notes?: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.monkGroup.findUnique({ where: { id: groupId } });
+    if (!existing || existing.deletedAt) throw ApiError.notFound('Monk group not found');
+
+    const group = await tx.monkGroup.update({
+      where: { id: groupId },
+      data: {
+        name: input.name,
+        leaderMonkId: input.leaderMonkId,
+        jainMembers: input.jainMembers !== undefined ? input.jainMembers : undefined,
+        nonJainMembers: input.nonJainMembers !== undefined ? input.nonJainMembers : undefined,
+        notes: input.notes !== undefined ? input.notes : undefined,
+      },
+    });
+
+    if (input.memberMonkIds !== undefined) {
+      // Unlink previous members that are not in the new list
+      await tx.monkProfile.updateMany({
+        where: { groupId: group.id, id: { notIn: input.memberMonkIds } },
+        data: { groupId: null },
+      });
+      
+      if (input.memberMonkIds.length > 0) {
+        // Link new members
+        await tx.monkProfile.updateMany({
+          where: { id: { in: input.memberMonkIds } },
+          data: { groupId: group.id },
+        });
+      }
+    }
+
+    return tx.monkGroup.findUnique({ where: { id: group.id }, include: { members: true } });
+  });
+}
+
+export async function deleteMonkGroup(groupId: string) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.monkGroup.findUnique({ where: { id: groupId } });
+    if (!existing || existing.deletedAt) throw ApiError.notFound('Monk group not found');
+
+    // Unlink all members
+    await tx.monkProfile.updateMany({
+      where: { groupId },
+      data: { groupId: null },
+    });
+
+    return tx.monkGroup.update({
+      where: { id: groupId },
+      data: { deletedAt: new Date() },
+    });
+  });
+}
+
 // --- Join Monk (follow) ---
 
 export async function followMonk(monkId: string, memberId: string) {

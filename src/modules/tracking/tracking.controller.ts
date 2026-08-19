@@ -22,7 +22,10 @@ export const updateRoute = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const listRoutes = asyncHandler(async (req: Request, res: Response) => {
-  const routes = await trackingService.listRoutes({ monkId: req.query.monkId as string | undefined });
+  const routes = await trackingService.listRoutes({ 
+    monkId: req.query.monkId as string | undefined,
+    monkGroupId: req.query.monkGroupId as string | undefined
+  });
   return ok(res, routes);
 });
 
@@ -39,6 +42,11 @@ export const recordJourneyEvent = asyncHandler(async (req: Request, res: Respons
 export const journeyTimeline = asyncHandler(async (req: Request, res: Response) => {
   const timeline = await trackingService.getJourneyTimeline(req.params.journeyId as string);
   return ok(res, timeline);
+});
+
+export const listJourneys = asyncHandler(async (_req: Request, res: Response) => {
+  const journeys = await trackingService.listJourneys();
+  return ok(res, journeys);
 });
 
 export const activeJourneys = asyncHandler(async (_req: Request, res: Response) => {

@@ -43,6 +43,21 @@ export const createMonkGroup = asyncHandler(async (req: Request, res: Response) 
   return created(res, group);
 });
 
+export const listMonkGroups = asyncHandler(async (req: Request, res: Response) => {
+  const groups = await monksService.listMonkGroups();
+  return ok(res, groups);
+});
+
+export const updateMonkGroup = asyncHandler(async (req: Request, res: Response) => {
+  const group = await monksService.updateMonkGroup(req.params.groupId as string, req.body);
+  return ok(res, group);
+});
+
+export const deleteMonkGroup = asyncHandler(async (req: Request, res: Response) => {
+  await monksService.deleteMonkGroup(req.params.groupId as string);
+  return ok(res, { deleted: true });
+});
+
 export const followMonk = asyncHandler(async (req: Request, res: Response) => {
   const member = await prisma.member.findUnique({ where: { userId: req.actor!.userId } });
   if (!member) throw ApiError.notFound('Member profile not found');

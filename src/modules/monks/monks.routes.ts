@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireRole, requirePermission } from '@/middlewares/auth';
 import { validate } from '@/middlewares/validate';
 import multer from 'multer';
-import { createMonkSchema, updateMonkSchema, createMonkGroupSchema } from './monks.dto';
+import { createMonkSchema, updateMonkSchema, createMonkGroupSchema, updateMonkGroupSchema } from './monks.dto';
 import * as monksController from './monks.controller';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -13,6 +13,11 @@ export const monkRoutes = Router();
 monkRoutes.get('/export', requireAuth, requirePermission('MONKS', 'VIEW'), monksController.exportMonksExcel);
 monkRoutes.get('/import-template', requireAuth, monksController.downloadMonkTemplate);
 
+// Groups
+monkRoutes.get('/groups', requireAuth, monksController.listMonkGroups);
+monkRoutes.post('/groups', requireAuth, requirePermission('MONKS', 'CREATE'), validate(createMonkGroupSchema), monksController.createMonkGroup);
+monkRoutes.patch('/groups/:groupId', requireAuth, requirePermission('MONKS', 'EDIT'), validate(updateMonkGroupSchema), monksController.updateMonkGroup);
+monkRoutes.delete('/groups/:groupId', requireAuth, requireRole('SUPER_ADMIN'), monksController.deleteMonkGroup);
 monkRoutes.get('/', requireAuth, monksController.listMonks);
 monkRoutes.get('/:monkId', requireAuth, monksController.getMonk);
 
@@ -30,8 +35,6 @@ monkRoutes.patch('/:monkId/status', requireAuth, requirePermission('MONKS', 'EDI
 // Bulk import Excel
 monkRoutes.post('/bulk-import/excel', requireAuth, requirePermission('MONKS', 'CREATE'), upload.single('file'), monksController.bulkImportMonksExcel);
 
-// Groups
-monkRoutes.post('/groups', requireAuth, requirePermission('MONKS', 'CREATE'), validate(createMonkGroupSchema), monksController.createMonkGroup);
 
 // Follow / Unfollow
 monkRoutes.post('/:monkId/follow', requireAuth, monksController.followMonk);

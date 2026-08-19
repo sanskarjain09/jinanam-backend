@@ -17,6 +17,7 @@ trackingRoutes.patch('/routes/:routeId', requireAuth, requirePermission('TRACKIN
 trackingRoutes.get('/routes', requireAuth, trackingController.listRoutes);
 
 // Journeys: manual tracking + timeline
+trackingRoutes.get('/journeys', requireAuth, trackingController.listJourneys);
 trackingRoutes.post('/journeys', requireAuth, requirePermission('TRACKING', 'CREATE'), validate(startJourneySchema), trackingController.startJourney);
 trackingRoutes.post('/journeys/:journeyId/events', requireAuth, requirePermission('TRACKING', 'EDIT'), validate(journeyEventSchema), trackingController.recordJourneyEvent);
 trackingRoutes.get('/journeys/active', requireAuth, trackingController.activeJourneys);

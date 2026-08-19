@@ -56,3 +56,5 @@ export const createMonkGroupSchema = z.object({
     notes: z.string().optional().nullable(),
   }),
 });
+
+export const updateMonkGroupSchema = z.object({ body: createMonkGroupSchema.shape.body.partial() });

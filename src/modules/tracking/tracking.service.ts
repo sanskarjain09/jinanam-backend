@@ -43,12 +43,13 @@ export async function ingestLocationPing(input: { deviceId: string; lat: number;
 // Routes (§5.10): A→B→C→D multi-stop builder
 // -----------------------------------------------------------------------------
 
-export async function createRoute(input: { name: string; monkId: string; journeyDate: Date; stops: unknown[]; createdById: string }) {
+export async function createRoute(input: { name: string; monkId?: string; monkGroupId?: string; journeyDate: Date; stops: unknown[]; createdById: string }) {
   const stops = (input.stops as any[]).map((s, i) => ({ ...s, order: s.order ?? i, status: 'PENDING' }));
   return prisma.route.create({
     data: {
       name: input.name,
-      monkId: input.monkId,
+      monkId: input.monkId || null,
+      monkGroupId: input.monkGroupId || null,
       journeyDate: input.journeyDate,
       stops: stops as Prisma.InputJsonValue,
       createdById: input.createdById,
@@ -65,10 +66,13 @@ export async function updateRoute(routeId: string, input: Partial<{ name: string
   });
 }
 
-export async function listRoutes(filters: { monkId?: string }) {
+export async function listRoutes(filters: { monkId?: string; monkGroupId?: string }) {
   return prisma.route.findMany({
-    where: { deletedAt: null, monkId: filters.monkId },
-    include: { monk: { select: { publicId: true, dikshaName: true, photoUrl: true } } },
+    where: { deletedAt: null, monkId: filters.monkId, monkGroupId: filters.monkGroupId },
+    include: { 
+      monk: { select: { publicId: true, dikshaName: true, photoUrl: true } },
+      monkGroup: { select: { name: true, leaderMonkId: true } }
+    },
     orderBy: { journeyDate: 'desc' },
   });
 }
@@ -78,15 +82,18 @@ export async function listRoutes(filters: { monkId?: string }) {
 // -----------------------------------------------------------------------------
 
 export async function startJourney(routeId: string) {
-  const route = await prisma.route.findUnique({ where: { id: routeId }, include: { monk: true } });
+  const route = await prisma.route.findUnique({ where: { id: routeId }, include: { monk: true, monkGroup: true } });
   if (!route || route.deletedAt) throw ApiError.notFound('Route not found');
 
   const existing = await prisma.journey.findFirst({ where: { routeId, status: 'IN_PROGRESS' } });
   if (existing) throw ApiError.conflict('A journey for this route is already in progress');
 
-  const journey = await prisma.journey.create({ data: { routeId, monkId: route.monkId } });
+  const journey = await prisma.journey.create({ data: { routeId, monkId: route.monkId, monkGroupId: route.monkGroupId } });
 
-  await notifyMonkFollowers(route.monkId, `Journey started on route "${route.name}".`);
+  const entityName = route.monk ? route.monk.dikshaName : (route.monkGroup ? route.monkGroup.name : 'Unknown');
+  if (route.monkId) {
+    await notifyMonkFollowers(route.monkId, `Journey started on route "${route.name}".`);
+  }
   
   const stops = (route.stops as any[]) ?? [];
   if (stops[0]?.templeId) {
@@ -94,7 +101,7 @@ export async function startJourney(routeId: string) {
       sourceModule: 'TRACKING_DEPARTURE',
       sourceId: journey.id,
       organizationId: stops[0].templeId,
-      title: `Vihar Started: ${route.monk?.dikshaName || 'Monk'}`,
+      title: `Vihar Started: ${entityName}`,
       description: `A Vihar journey has started from ${stops[0].templeName}.`
     }).catch(err => console.error('Failed to post departure feed card:', err));
   }
@@ -103,7 +110,7 @@ export async function startJourney(routeId: string) {
 }
 
 export async function recordJourneyEvent(journeyId: string, input: { type: 'DEPARTURE' | 'ARRIVAL' | 'DELAY' | 'MANUAL_UPDATE'; templeId?: string; note?: string; createdById: string; timestamp?: string }) {
-  const journey = await prisma.journey.findUnique({ where: { id: journeyId }, include: { route: true, monk: true } });
+  const journey = await prisma.journey.findUnique({ where: { id: journeyId }, include: { route: true, monk: true, monkGroup: true } });
   if (!journey) throw ApiError.notFound('Journey not found');
 
   const event = await prisma.journeyEvent.create({
@@ -133,16 +140,20 @@ export async function recordJourneyEvent(journeyId: string, input: { type: 'DEPA
         : { currentStopIndex: idx + 1 },
     });
 
+    const entityName = journey.monk ? journey.monk.dikshaName : (journey.monkGroup ? journey.monkGroup.name : 'Unknown');
+
     // Notify upcoming temples + "Join Monk" followers (§5.10)
-    await notifyMonkFollowers(journey.monkId, `${journey.monk.dikshaName} arrived at ${stops[idx]?.templeName ?? 'a stop'} on route "${journey.route.name}".`);
+    if (journey.monkId) {
+      await notifyMonkFollowers(journey.monkId, `${entityName} arrived at ${stops[idx]?.templeName ?? 'a stop'} on route "${journey.route.name}".`);
+    }
 
     if (stops[idx]?.templeId) {
       await createAutoFeedCard({
         sourceModule: 'TRACKING_ARRIVAL',
         sourceId: event.id,
         organizationId: stops[idx].templeId,
-        title: `Vihar Arrival: ${journey.monk.dikshaName}`,
-        description: `${journey.monk.dikshaName} has arrived at ${stops[idx].templeName}.`
+        title: `Vihar Arrival: ${entityName}`,
+        description: `${entityName} has arrived at ${stops[idx].templeName}.`
       }).catch(err => console.error('Failed to post arrival feed card:', err));
     }
   }
@@ -167,6 +178,17 @@ export async function recordJourneyEvent(journeyId: string, input: { type: 'DEPA
   }
 
   return event;
+}
+
+export async function listJourneys() {
+  return prisma.journey.findMany({
+    include: {
+      monk: { select: { publicId: true, dikshaName: true, photoUrl: true } },
+      monkGroup: { select: { id: true, name: true, leaderMonk: { select: { dikshaName: true } } } },
+      route: { select: { name: true, journeyDate: true, stops: true } },
+    },
+    orderBy: { startedAt: 'desc' },
+  });
 }
 
 export async function getJourneyTimeline(journeyId: string) {

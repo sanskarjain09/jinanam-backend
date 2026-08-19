@@ -890,6 +890,8 @@ model MonkGroup {
   notes          String?
   members        MonkProfile[]
   tours          Tour[]
+  Route          Route[]
+  Journey        Journey[]
 
   @@map("monk_groups")
 }
@@ -1716,16 +1718,18 @@ model SimRecord {
 }
 
 model Route {
-  id          String      @id @default(cuid())
+  id          String       @id @default(cuid())
   name        String
-  monkId      String
+  monkId      String?
+  monkGroupId String?
   journeyDate DateTime
   stops       Json
   createdById String?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime     @default(now())
   deletedAt   DateTime?
   journeys    Journey[]
-  monk        MonkProfile @relation(fields: [monkId], references: [id])
+  monk        MonkProfile? @relation(fields: [monkId], references: [id])
+  monkGroup   MonkGroup?   @relation(fields: [monkGroupId], references: [id])
 
   @@map("routes")
 }
@@ -1733,13 +1737,15 @@ model Route {
 model Journey {
   id               String         @id @default(cuid())
   routeId          String
-  monkId           String
+  monkId           String?
+  monkGroupId      String?
   currentStopIndex Int            @default(0)
   status           String         @default("IN_PROGRESS")
   startedAt        DateTime       @default(now())
   completedAt      DateTime?
   events           JourneyEvent[]
-  monk             MonkProfile    @relation(fields: [monkId], references: [id])
+  monk             MonkProfile?   @relation(fields: [monkId], references: [id])
+  monkGroup        MonkGroup?     @relation(fields: [monkGroupId], references: [id])
   route            Route          @relation(fields: [routeId], references: [id])
 
   @@map("journeys")
