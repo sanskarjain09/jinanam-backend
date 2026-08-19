@@ -8,6 +8,7 @@ import { monkRoutes } from '@/modules/monks/monks.routes';
 import { templeRoutes } from '@/modules/temples/temples.routes';
 import { jainCenterRoutes } from '@/modules/jainCenters/jainCenters.routes';
 import { dharamshalaRoutes } from '@/modules/dharamshalas/dharamshalas.routes';
+import { sthanaksRoutes } from '@/modules/sthanaks/sthanaks.routes';
 import { pathshalaRoutes } from '@/modules/pathshala/pathshala.routes';
 import { staffRoutes } from '@/modules/staff/staff.routes';
 import { visitorRoutes } from '@/modules/visitors/visitors.routes';
@@ -62,6 +63,7 @@ export function registerRoutes(app: Express) {
   v1.use('/monks', monkRoutes);
   v1.use('/temples', templeRoutes);
   v1.use('/jain-centers', jainCenterRoutes);
+  v1.use('/sthanaks', sthanaksRoutes);
   v1.use('/dharamshalas', dharamshalaRoutes);
   v1.use('/staff', staffRoutes);
   v1.use('/visitors', visitorRoutes);

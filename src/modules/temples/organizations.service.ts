@@ -12,6 +12,7 @@ const PREFIX_BY_TYPE: Record<OrganizationType, keyof typeof ID_PREFIXES> = {
   BHOJANSHALA: 'BHOJANSHALA',
   COMMUNITY_HALL: 'COMMUNITY_HALL',
   TRUST_OFFICE: 'TRUST_OFFICE',
+  STHANAK: 'STHANAK',
 };
 
 /** Only Super Admin creates Temples/JCs/Dharamshalas (§5.5, §5.6) — enforced at the route layer via requireRole. */
@@ -382,9 +383,15 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
   }
 
   if (type === 'DHARAMSHALA') {
-    whereClause.dharamshalaPublished = true;
+    whereClause.OR = [
+      { type: 'DHARAMSHALA' },
+      { dharamshalaPublished: true }
+    ];
   } else if (type === 'BHOJANSHALA') {
-    whereClause.bhojanshalaPublished = true;
+    whereClause.OR = [
+      { type: 'BHOJANSHALA' },
+      { bhojanshalaPublished: true }
+    ];
   } else {
     whereClause.type = type;
   }

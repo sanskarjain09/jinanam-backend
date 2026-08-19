@@ -2771,6 +2771,7 @@ enum OrganizationType {
   BHOJANSHALA
   COMMUNITY_HALL
   TRUST_OFFICE
+  STHANAK
 }
 
 enum OrganizationStatus {
