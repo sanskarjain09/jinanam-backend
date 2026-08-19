@@ -31,6 +31,10 @@ const createOpportunitySchema = z.object({
   }),
 });
 
+const updateOpportunitySchema = z.object({
+  body: createOpportunitySchema.shape.body.partial(),
+});
+
 const decisionSchema = z.object({ body: z.object({ status: z.enum(['APPROVED', 'REJECTED']) }) });
 
 async function requireMember(userId: string) {
@@ -65,6 +69,44 @@ volunteerRoutes.post('/opportunities', requireAuth, requirePermission('VOLUNTEER
   });
   return created(res, withParticipation(opportunity));
 }));
+
+volunteerRoutes.patch('/opportunities/:opportunityId', requireAuth, requirePermission('VOLUNTEERS', 'CREATE'), validate(updateOpportunitySchema), asyncHandler(async (req: Request, res: Response) => {
+  const opportunityId = req.params.opportunityId as string;
+
+  const existing = await prisma.volunteerOpportunity.findUnique({ where: { id: opportunityId } });
+  if (!existing) throw ApiError.notFound('Opportunity not found');
+
+  const actor = req.actor!;
+  if (!actor.isSuperAdmin && !actor.organizationIds.includes(existing.organizationId)) {
+    throw ApiError.tenantScope('You do not have access to this opportunity');
+  }
+
+  const { roles, ...rest } = req.body;
+
+  const opportunity = await prisma.$transaction(async (tx) => {
+    await tx.volunteerOpportunity.update({
+      where: { id: opportunityId },
+      data: rest,
+    });
+
+    if (Array.isArray(roles)) {
+      await tx.volunteerRoleRequirement.deleteMany({ where: { opportunityId } });
+      if (roles.length > 0) {
+        await tx.volunteerRoleRequirement.createMany({
+          data: roles.map((r: { title: string; count: number }) => ({ opportunityId, title: r.title, requiredCount: r.count })),
+        });
+      }
+    }
+
+    return tx.volunteerOpportunity.findUniqueOrThrow({
+      where: { id: opportunityId },
+      include: { roleRequirements: true, applications: true },
+    });
+  });
+
+  return ok(res, withParticipation(opportunity));
+}));
+
 
 volunteerRoutes.get('/opportunities', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { organizationId } = req.query as { organizationId?: string };

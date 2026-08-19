@@ -4,6 +4,7 @@ import { ApiError } from '@/utils/ApiError';
 import { getIO } from '@/sockets';
 import { enqueueNotification } from '@/engines/notification/notification.service';
 import { raiseAlert } from '@/modules/alerts/alerts.service';
+import { createAutoFeedCard } from '@/modules/feed/feed.service';
 
 const MOVING_THRESHOLD_MINUTES = 5;
 const IDLE_THRESHOLD_MINUTES = 30;
@@ -77,7 +78,7 @@ export async function listRoutes(filters: { monkId?: string }) {
 // -----------------------------------------------------------------------------
 
 export async function startJourney(routeId: string) {
-  const route = await prisma.route.findUnique({ where: { id: routeId } });
+  const route = await prisma.route.findUnique({ where: { id: routeId }, include: { monk: true } });
   if (!route || route.deletedAt) throw ApiError.notFound('Route not found');
 
   const existing = await prisma.journey.findFirst({ where: { routeId, status: 'IN_PROGRESS' } });
@@ -86,6 +87,18 @@ export async function startJourney(routeId: string) {
   const journey = await prisma.journey.create({ data: { routeId, monkId: route.monkId } });
 
   await notifyMonkFollowers(route.monkId, `Journey started on route "${route.name}".`);
+  
+  const stops = (route.stops as any[]) ?? [];
+  if (stops[0]?.templeId) {
+    await createAutoFeedCard({
+      sourceModule: 'TRACKING_DEPARTURE',
+      sourceId: journey.id,
+      organizationId: stops[0].templeId,
+      title: `Vihar Started: ${route.monk?.dikshaName || 'Monk'}`,
+      description: `A Vihar journey has started from ${stops[0].templeName}.`
+    }).catch(err => console.error('Failed to post departure feed card:', err));
+  }
+
   return journey;
 }
 
@@ -122,6 +135,16 @@ export async function recordJourneyEvent(journeyId: string, input: { type: 'DEPA
 
     // Notify upcoming temples + "Join Monk" followers (§5.10)
     await notifyMonkFollowers(journey.monkId, `${journey.monk.dikshaName} arrived at ${stops[idx]?.templeName ?? 'a stop'} on route "${journey.route.name}".`);
+
+    if (stops[idx]?.templeId) {
+      await createAutoFeedCard({
+        sourceModule: 'TRACKING_ARRIVAL',
+        sourceId: event.id,
+        organizationId: stops[idx].templeId,
+        title: `Vihar Arrival: ${journey.monk.dikshaName}`,
+        description: `${journey.monk.dikshaName} has arrived at ${stops[idx].templeName}.`
+      }).catch(err => console.error('Failed to post arrival feed card:', err));
+    }
   }
 
   if (input.type === 'DELAY') {

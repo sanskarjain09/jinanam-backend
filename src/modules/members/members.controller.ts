@@ -273,15 +273,6 @@ export const adminCreateMember = asyncHandler(async (req: Request, res: Response
     throw ApiError.validation(errors);
   }
 
-  // Gaccha only exists under some Sub-Communities (e.g. Murtipujak) — require
-  // it whenever the chosen Sub-Community actually has Gacchas to pick from.
-  if (category === 'JAIN' && subCommunityId && !gacchaId) {
-    const gacchaCount = await prisma.gaccha.count({ where: { subCommunityId, deletedAt: null } });
-    if (gacchaCount > 0) {
-      throw ApiError.validation({ gacchaId: ['Gaccha is required for this sub-community'] });
-    }
-  }
-
   const existing = await prisma.user.findUnique({ where: { mobile } });
   if (existing) throw ApiError.conflict('This mobile number is already registered');
 

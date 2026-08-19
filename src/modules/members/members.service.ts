@@ -110,13 +110,6 @@ export async function registerMember(input: RegisterMemberInput) {
     throw ApiError.validation({ communityId: ['Community is required for Jain members'] });
   }
 
-  if (input.category === 'JAIN' && input.subCommunityId && !input.gacchaId) {
-    const gacchaCount = await prisma.gaccha.count({ where: { subCommunityId: input.subCommunityId, deletedAt: null } });
-    if (gacchaCount > 0) {
-      throw ApiError.validation({ gacchaId: ['Gaccha is required for this sub-community'] });
-    }
-  }
-
   let aadhaarHash: string | null = null;
   if (input.aadhaar) {
     aadhaarHash = hashForLookup(input.aadhaar);
@@ -321,14 +314,7 @@ export async function resolveSiblingNames(siblings: unknown): Promise<Record<str
 export async function updateMemberProfile(memberId: string, input: Partial<RegisterMemberInput>) {
   const existing = await prisma.member.findUniqueOrThrow({ where: { id: memberId } });
 
-  // Only enforce Gaccha-required when the Sub-Community is actually being
-  // changed in this update — untouched fields shouldn't retroactively fail.
-  if (input.subCommunityId !== undefined && !input.gacchaId) {
-    const gacchaCount = await prisma.gaccha.count({ where: { subCommunityId: input.subCommunityId, deletedAt: null } });
-    if (gacchaCount > 0) {
-      throw ApiError.validation({ gacchaId: ['Gaccha is required for this sub-community'] });
-    }
-  }
+
 
   const fullName = input.firstName || input.middleName || input.surname
     ? [input.firstName ?? existing.firstName, input.middleName ?? existing.middleName, input.surname ?? existing.surname].filter(Boolean).join(' ')

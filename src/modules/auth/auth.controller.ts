@@ -129,7 +129,29 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
 export const me = asyncHandler(async (req: Request, res: Response) => {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: req.actor!.userId },
-    select: { id: true, publicId: true, mobile: true, email: true, firstName: true, lastName: true, primaryRoleKey: true, status: true, photoUrl: true },
+    select: { 
+      id: true, 
+      publicId: true, 
+      mobile: true, 
+      email: true, 
+      firstName: true, 
+      lastName: true, 
+      primaryRoleKey: true, 
+      status: true, 
+      photoUrl: true,
+      userOrganizations: {
+        select: {
+          organizationId: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              type: true
+            }
+          }
+        }
+      }
+    },
   });
   return ok(res, user);
 });
