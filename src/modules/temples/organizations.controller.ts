@@ -24,12 +24,23 @@ export const makeOrganizationController = (type: OrganizationType) => ({
 
   get: asyncHandler(async (req: Request, res: Response) => {
     const org = await orgService.getOrganization(req.params.organizationId as string);
+    
+    // Prevent members from viewing unpublished standalone organizations
+    if (!req.actor?.isSuperAdmin && (!req.actor?.organizationIds || !req.actor.organizationIds.includes(org.id))) {
+      if (org.type === 'DHARAMSHALA' && !org.dharamshalaPublished) {
+        throw ApiError.forbidden('This Dharamshala is not published yet');
+      }
+      if (org.type === 'BHOJANSHALA' && !org.bhojanshalaPublished) {
+        throw ApiError.forbidden('This Bhojanshala is not published yet');
+      }
+    }
+    
     return ok(res, org);
   }),
 
   list: asyncHandler(async (req: Request, res: Response) => {
     const { city, state } = req.query as { city?: string; state?: string };
-    const orgs = await orgService.listOrganizations(type, { city, state });
+    const orgs = await orgService.listOrganizations(type, { city, state }, req.actor);
     return ok(res, orgs);
   }),
 

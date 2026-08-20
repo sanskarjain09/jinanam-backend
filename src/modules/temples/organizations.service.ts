@@ -371,7 +371,7 @@ export async function getOrganization(organizationId: string) {
   };
 }
 
-export async function listOrganizations(type: OrganizationType, filters: { city?: string; state?: string; hasBhojanshala?: boolean }) {
+export async function listOrganizations(type: OrganizationType, filters: { city?: string; state?: string; hasBhojanshala?: boolean }, actor?: any) {
   const whereClause: any = {
     deletedAt: null,
     city: filters.city,
@@ -383,15 +383,35 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
   }
 
   if (type === 'DHARAMSHALA') {
-    whereClause.OR = [
-      { type: 'DHARAMSHALA' },
-      { dharamshalaPublished: true }
-    ];
+    if (actor?.isSuperAdmin) {
+      whereClause.OR = [
+        { type: 'DHARAMSHALA' },
+        { dharamshalaPublished: true }
+      ];
+    } else if (actor?.organizationIds && actor.organizationIds.length > 0) {
+      whereClause.OR = [
+        { dharamshalaPublished: true },
+        { id: { in: actor.organizationIds }, type: 'DHARAMSHALA' },
+        { id: { in: actor.organizationIds }, hasDharamshala: true }
+      ];
+    } else {
+      whereClause.dharamshalaPublished = true;
+    }
   } else if (type === 'BHOJANSHALA') {
-    whereClause.OR = [
-      { type: 'BHOJANSHALA' },
-      { bhojanshalaPublished: true }
-    ];
+    if (actor?.isSuperAdmin) {
+      whereClause.OR = [
+        { type: 'BHOJANSHALA' },
+        { bhojanshalaPublished: true }
+      ];
+    } else if (actor?.organizationIds && actor.organizationIds.length > 0) {
+      whereClause.OR = [
+        { bhojanshalaPublished: true },
+        { id: { in: actor.organizationIds }, type: 'BHOJANSHALA' },
+        { id: { in: actor.organizationIds }, hasBhojanshala: true }
+      ];
+    } else {
+      whereClause.bhojanshalaPublished = true;
+    }
   } else {
     whereClause.type = type;
   }
