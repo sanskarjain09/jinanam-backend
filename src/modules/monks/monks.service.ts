@@ -241,6 +241,7 @@ export async function listMonks(filters: { templeId?: string; groupId?: string; 
     },
     include: { 
       currentTemple: { select: { id: true, publicId: true, name: true, city: true } },
+      community: { select: { name: true } },
       _count: { select: { follows: true } },
     },
     orderBy: { dikshaName: 'asc' },

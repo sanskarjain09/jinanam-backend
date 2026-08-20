@@ -123,6 +123,20 @@ async function enrichPlans<T extends { monkIds: unknown; sponsorIds: unknown; st
   }));
 }
 
+// List ALL Chaturmas plans (Super Admin or global)
+chaturmasRoutes.get(
+  '/',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const rows = await prisma.chaturmasPlan.findMany({
+      where: { deletedAt: null },
+      orderBy: { startDate: 'desc' },
+    });
+    const enrichedRows = await enrichPlans(rows);
+    return ok(res, enrichedRows, { total: enrichedRows.length });
+  }),
+);
+
 // List Chaturmas plans for an organization
 chaturmasRoutes.get(
   '/org/:organizationId',
@@ -207,6 +221,51 @@ chaturmasRoutes.post(
         createdById: req.actor!.userId,
       },
     });
+
+    // Fire and forget timeline generation
+    void (async () => {
+      try {
+        const { createAutoFeedCard } = await import('@/modules/feed/feed.service');
+        
+        const org = await prisma.organization.findUnique({
+          where: { id: plan.organizationId },
+          select: { name: true, city: true },
+        });
+
+        const categoryRow = await prisma.feedCategory.findFirst({ where: { name: 'Monk Updates' } });
+        const visibilityConfig = { isPublic: true };
+
+        // 1. Temple Timeline
+        await createAutoFeedCard({
+          sourceModule: 'ORGANIZATION',
+          sourceId: plan.organizationId,
+          organizationId: plan.organizationId,
+          title: `New Chaturmas Planned: ${plan.monkName}`,
+          description: `${plan.monkName} will be staying for Chaturmas at ${org?.name || plan.locationName} ${org?.city ? `(${org.city})` : ''} starting ${plan.startDate.toDateString()}.`,
+          categoryId: categoryRow?.id,
+          visibilityConfig,
+        });
+        
+        // 2. Monk Timeline
+        if (plan.monkId) {
+          const monk = await prisma.monkProfile.findUnique({ where: { id: plan.monkId } });
+          if (monk) {
+            await createAutoFeedCard({
+              sourceModule: 'MONK_TIMELINE',
+              sourceId: plan.monkId,
+              title: `Chaturmas at ${org?.name || plan.locationName}`,
+              description: `${plan.monkName} will be staying for Chaturmas at ${org?.name || plan.locationName} ${org?.city ? `(${org.city})` : ''} starting ${plan.startDate.toDateString()}.`,
+              coverUrl: monk.photoUrl || undefined,
+              categoryId: categoryRow?.id,
+              visibilityConfig,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to create timeline feed posts for Chaturmas Plan:', err);
+      }
+    })();
+
     return created(res, plan);
   }),
 );

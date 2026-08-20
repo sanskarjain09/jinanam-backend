@@ -283,6 +283,8 @@ export async function getOrganization(organizationId: string) {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     include: {
+      parentOrganization: true,
+      childOrganizations: true,
       gallery: { orderBy: { order: 'asc' } },
       trustees: { include: { member: true } },
       volunteers: { include: { member: true } },
@@ -419,6 +421,8 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
   return prisma.organization.findMany({
     where: whereClause,
     include: {
+      parentOrganization: true,
+      childOrganizations: true,
       userOrganizations: {
         include: {
           user: true
