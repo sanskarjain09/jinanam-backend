@@ -6,7 +6,7 @@ import { ApiError } from '@/utils/ApiError';
 import { enqueueNotification } from '@/engines/notification/notification.service';
 import { MODULES } from '@/config/constants';
 
-const ADMIN_ROLES: RoleKey[] = ['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'BHOJANSHALA_ADMIN', 'STAFF', 'SECURITY_GUARD', 'EVENT_SCANNER'];
+const ADMIN_ROLES: RoleKey[] = ['ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'BHOJANSHALA_ADMIN', 'STAFF', 'SECURITY_GUARD', 'EVENT_SCANNER'];
 
 // DELETE stays Super-Admin-only everywhere regardless of stored permissions
 // (see assertNotDeleteUnlessSuperAdmin) — no point granting it to an Admin.
@@ -68,7 +68,7 @@ export async function createAdminAccount(input: {
 
   let modulesToGrant = input.grantedModules;
   if (!modulesToGrant || modulesToGrant.length === 0) {
-    if (['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'BHOJANSHALA_ADMIN'].includes(input.role)) {
+    if (['ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'BHOJANSHALA_ADMIN'].includes(input.role)) {
       modulesToGrant = Object.values(MODULES);
     } else {
       modulesToGrant = ['EVENTS', 'STAFF', 'ANNOUNCEMENTS', 'POLLS', 'SETTINGS'];

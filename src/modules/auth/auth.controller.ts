@@ -224,7 +224,7 @@ export const listAdmins = asyncHandler(async (req: Request, res: Response) => {
   const admins = await prisma.user.findMany({
     where: {
       primaryRoleKey: {
-        in: ['SUPER_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN'],
+        in: ['SUPER_ADMIN', 'ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN'],
       },
       deletedAt: null,
     },

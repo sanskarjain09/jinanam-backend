@@ -350,7 +350,7 @@ export async function checkInRsvp(eventId: string, rsvpId: string, actor: { user
     const isMember = await prisma.userOrganization.findFirst({
       where: { organizationId: rsvpRow.event.organizationId, userId: actor.userId }
     });
-    if (!isMember || !['SUPER_ADMIN', 'TEMPLE_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'PAGE_OWNER', 'EVENT_SCANNER'].includes(isMember.roleKey)) {
+    if (!isMember || !['SUPER_ADMIN', 'ORG_ADMIN', 'TEMPLE_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'PAGE_OWNER', 'EVENT_SCANNER'].includes(isMember.roleKey)) {
       throw ApiError.forbidden('You do not have permission to check-in for this event');
     }
   }
@@ -373,7 +373,7 @@ export async function checkInRsvpManual(rsvpId: string, actor: { userId: string,
     const isMember = await prisma.userOrganization.findFirst({
       where: { organizationId: rsvpRow.event.organizationId, userId: actor.userId }
     });
-    if (!isMember || !['SUPER_ADMIN', 'TEMPLE_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'PAGE_OWNER', 'EVENT_SCANNER'].includes(isMember.roleKey)) {
+    if (!isMember || !['SUPER_ADMIN', 'ORG_ADMIN', 'TEMPLE_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'PAGE_OWNER', 'EVENT_SCANNER'].includes(isMember.roleKey)) {
       throw ApiError.forbidden('You do not have permission to check-in for this event');
     }
   }

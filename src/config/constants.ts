@@ -33,6 +33,7 @@ export const ID_PREFIXES = {
   DHARAMSHALA_BOOKING: 'JFDHB',
   PATHSHALA_BOOKING: 'JFPB',
   STHANAK: 'JFSTN',
+  GAUSHALA: 'JFGS',
 } as const;
 
 export type IdPrefixKey = keyof typeof ID_PREFIXES;

@@ -2720,6 +2720,7 @@ model BhojanshalaMenuItem {
 
 enum RoleKey {
   SUPER_ADMIN
+  ORG_ADMIN
   TEMPLE_ADMIN
   DHARAMSHALA_ADMIN
   BHOJANSHALA_ADMIN

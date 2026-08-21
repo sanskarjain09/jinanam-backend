@@ -24,7 +24,7 @@ export async function runStaffSweep() {
   for (const doc of expiringDocs) {
     const daysLeft = Math.ceil((doc.expiryDate!.getTime() - now.getTime()) / (24 * 3600_000));
     const orgAdmins = await prisma.userOrganization.findMany({
-      where: { organizationId: doc.staff.organization.id, roleKey: { in: ['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN'] } },
+      where: { organizationId: doc.staff.organization.id, roleKey: { in: ['ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN'] } },
       select: { userId: true },
     });
     const recipients = new Set([doc.staff.member.userId, ...orgAdmins.map((a) => a.userId)]);
@@ -49,7 +49,7 @@ export async function runStaffSweep() {
 
   for (const attendance of staleAttendance) {
     const orgAdmins = await prisma.userOrganization.findMany({
-      where: { organizationId: attendance.staff.organization.id, roleKey: { in: ['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN'] } },
+      where: { organizationId: attendance.staff.organization.id, roleKey: { in: ['ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN'] } },
       select: { userId: true },
     });
     const recipients = new Set([attendance.staff.member.userId, ...orgAdmins.map((a) => a.userId)]);

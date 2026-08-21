@@ -87,7 +87,7 @@ interface RegisterMemberInput {
   siblings?: { linkProfile?: boolean; siblingMemberId?: string; fullName?: string; relationship?: string }[];
 }
 
-const ADMIN_ROLES = ['SUPER_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN'];
+const ADMIN_ROLES = ['SUPER_ADMIN', 'ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN'];
 
 export async function registerMember(input: RegisterMemberInput) {
   // Ensure the mobile number isn't already registered to an existing profile.

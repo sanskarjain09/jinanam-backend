@@ -13,6 +13,8 @@ const PREFIX_BY_TYPE: Record<OrganizationType, keyof typeof ID_PREFIXES> = {
   COMMUNITY_HALL: 'COMMUNITY_HALL',
   TRUST_OFFICE: 'TRUST_OFFICE',
   STHANAK: 'STHANAK',
+  PATHSHALA: 'PATHSHALA',
+  GAUSHALA: 'GAUSHALA',
 };
 
 /** Only Super Admin creates Temples/JCs/Dharamshalas (§5.5, §5.6) — enforced at the route layer via requireRole. */
@@ -21,7 +23,7 @@ export async function createOrganization(input: Record<string, unknown> & { type
   // pulled out before the Prisma create() call (previously it wasn't, so
   // submitting building/room data during initial creation crashed with an
   // "unknown argument" error) and synced separately afterward instead.
-  const { type, createdById, bankAccount, buildings, ...rest } = input as any;
+  const { type, createdById, bankAccount, buildings, childOrganizationIds, ...rest } = input as any;
 
   const publicId = await prisma.$transaction((tx) => nextPublicId(PREFIX_BY_TYPE[type as OrganizationType], tx));
 
@@ -46,6 +48,9 @@ export async function createOrganization(input: Record<string, unknown> & { type
       bankAccountEncrypted: bankAccount ? encryptField(bankAccount) : null,
       createdById,
       updatedById: createdById,
+      ...(childOrganizationIds && Array.isArray(childOrganizationIds) ? {
+        childOrganizations: { connect: childOrganizationIds.map((id: string) => ({ id })) }
+      } : {})
     },
   });
 
@@ -244,7 +249,7 @@ async function syncOrgBuildings(organizationId: string, buildings: any[], prefer
   }
 /** Sync buildings/rooms, then persist the rest of the org's fields. */
 export async function updateOrganization(organizationId: string, input: Record<string, unknown>, updatedById: string) {
-  const { bankAccount, buildings, ...rest } = input as any;
+  const { bankAccount, buildings, childOrganizationIds, ...rest } = input as any;
 
   // B3 Fix: Convert empty-string FK relation IDs to null/undefined to prevent
   // Prisma FK constraint violations (e.g., mulNayakBhagwanId: "" → undefined).
@@ -268,6 +273,9 @@ export async function updateOrganization(organizationId: string, input: Record<s
       ...(bankAccount ? { bankAccountEncrypted: encryptField(bankAccount) } : {}),
       updatedById,
       updatedAt: new Date(),
+      ...(childOrganizationIds && Array.isArray(childOrganizationIds) ? {
+        childOrganizations: { set: childOrganizationIds.map((id: string) => ({ id })) }
+      } : {})
     },
   });
 
@@ -388,7 +396,7 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
     if (actor?.isSuperAdmin) {
       whereClause.OR = [
         { type: 'DHARAMSHALA' },
-        { dharamshalaPublished: true }
+        { hasDharamshala: true }
       ];
     } else if (actor?.organizationIds && actor.organizationIds.length > 0) {
       whereClause.OR = [
@@ -397,13 +405,16 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
         { id: { in: actor.organizationIds }, hasDharamshala: true }
       ];
     } else {
-      whereClause.dharamshalaPublished = true;
+      whereClause.OR = [
+        { type: 'DHARAMSHALA', dharamshalaPublished: true },
+        { hasDharamshala: true, dharamshalaPublished: true }
+      ];
     }
   } else if (type === 'BHOJANSHALA') {
     if (actor?.isSuperAdmin) {
       whereClause.OR = [
         { type: 'BHOJANSHALA' },
-        { bhojanshalaPublished: true }
+        { hasBhojanshala: true }
       ];
     } else if (actor?.organizationIds && actor.organizationIds.length > 0) {
       whereClause.OR = [
@@ -412,7 +423,40 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
         { id: { in: actor.organizationIds }, hasBhojanshala: true }
       ];
     } else {
-      whereClause.bhojanshalaPublished = true;
+      whereClause.OR = [
+        { type: 'BHOJANSHALA', bhojanshalaPublished: true },
+        { hasBhojanshala: true, bhojanshalaPublished: true }
+      ];
+    }
+  } else if (type === 'PATHSHALA') {
+    if (actor?.isSuperAdmin) {
+      whereClause.OR = [
+        { type: 'PATHSHALA' },
+        { hasPathshala: true }
+      ];
+    } else if (actor?.organizationIds && actor.organizationIds.length > 0) {
+      whereClause.OR = [
+        { pathshalaPublished: true },
+        { id: { in: actor.organizationIds }, type: 'PATHSHALA' },
+        { id: { in: actor.organizationIds }, hasPathshala: true }
+      ];
+    } else {
+      whereClause.OR = [
+        { type: 'PATHSHALA', pathshalaPublished: true },
+        { hasPathshala: true, pathshalaPublished: true }
+      ];
+    }
+  } else if (type === 'GAUSHALA') {
+    if (actor?.isSuperAdmin) {
+      whereClause.OR = [
+        { type: 'GAUSHALA' }
+      ];
+    } else if (actor?.organizationIds && actor.organizationIds.length > 0) {
+      whereClause.OR = [
+        { id: { in: actor.organizationIds }, type: 'GAUSHALA' }
+      ];
+    } else {
+      whereClause.type = 'GAUSHALA';
     }
   } else {
     whereClause.type = type;

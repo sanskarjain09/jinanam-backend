@@ -82,7 +82,7 @@ export const createAdminAccountSchema = z.object({
     mobile: mobileSchema,
     firstName: z.string().min(1),
     lastName: z.string().optional(),
-    role: z.enum(['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'STAFF', 'SUB_ADMIN', 'BHOJANSHALA_ADMIN']),
+    role: z.enum(['ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'STAFF', 'SUB_ADMIN', 'BHOJANSHALA_ADMIN']),
     organizationIds: z.array(z.string()),
     modules: z.array(z.string()).optional(),
     permissionLevel: z.enum(['READ', 'READ_WRITE']).optional(),

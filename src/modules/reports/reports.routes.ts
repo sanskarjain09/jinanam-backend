@@ -334,7 +334,7 @@ reportRoutes.get(
   asyncHandler(async (_req: Request, res: Response) => {
     const admins = await prisma.user.findMany({
       where: {
-        primaryRoleKey: { in: ['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN'] },
+        primaryRoleKey: { in: ['ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN'] },
         deletedAt: null,
       },
       select: { primaryRoleKey: true, status: true, createdAt: true },

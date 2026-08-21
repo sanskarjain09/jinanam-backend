@@ -88,7 +88,7 @@ notificationRoutes.post('/broadcast', requireAuth, validate(broadcastSchema), as
     userIds = members.map((m) => m.userId);
   } else if (targetAudience === 'TEMPLE_ADMINS') {
     const admins = await prisma.user.findMany({
-      where: { primaryRoleKey: { in: ['TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN'] } },
+      where: { primaryRoleKey: { in: ['ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN'] } },
       select: { id: true },
     });
     userIds = admins.map((a) => a.id);
