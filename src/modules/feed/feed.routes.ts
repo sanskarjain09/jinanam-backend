@@ -56,6 +56,7 @@ const feedQuerySchema = z.object({
     categoryId: z.string().optional(),
     filterKeys: z.union([z.string(), z.array(z.string())]).optional(),
     savedOnly: z.preprocess((val) => val === 'true', z.boolean()).optional(),
+    tab: z.string().optional(),
   }),
 });
 
@@ -66,7 +67,7 @@ feedRoutes.get(
   requireAuth,
   validate(feedQuerySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { page, pageSize, q, categoryId, filterKeys, savedOnly } = req.query as any;
+    const { page, pageSize, q, categoryId, filterKeys, savedOnly, tab } = req.query as any;
     const resolvedFilterKeys = typeof filterKeys === 'string' ? [filterKeys] : filterKeys;
     
     const member = await prisma.member.findUnique({ where: { userId: req.actor!.userId } });
@@ -74,8 +75,27 @@ feedRoutes.get(
     // Accounts without a member profile (Super Admin, staff-only) get the
     // global chronological view instead of the personalized smart feed.
     if (!member) {
+      const whereClause: Prisma.FeedPostWhereInput = { deletedAt: null };
+      
+      if (q) {
+        whereClause.title = { contains: String(q), mode: 'insensitive' };
+      }
+      if (categoryId) {
+        whereClause.categoryId = String(categoryId);
+      }
+      
+      if (tab === 'scheduled') {
+        whereClause.startAt = { gt: new Date() };
+      } else if (tab === 'featured') {
+        whereClause.isPinned = true;
+      } else if (tab === 'reported') {
+        whereClause.reports = { some: {} };
+      } else {
+        whereClause.isActive = true;
+      }
+
       const posts = await prisma.feedPost.findMany({
-        where: { isActive: true, deletedAt: null },
+        where: whereClause,
         include: { organization: { select: { name: true, publicId: true, logoUrl: true } }, category: true, poll: true },
         orderBy: { createdAt: 'desc' },
         skip: (Number(page) - 1) * Number(pageSize),

@@ -78,6 +78,9 @@ interface RegisterMemberInput {
   isVolunteer?: boolean;
   volunteerAreas?: string[];
   volunteerAvailability?: string;
+  favouriteTempleId?: string;
+  favouriteDharamshalaId?: string;
+  favouriteBhojanshalaId?: string;
   preferredTempleIds?: string[];
   additionalLinks?: { targetType: 'TEMPLE' | 'MONK'; targetId: string }[];
   consents?: { consentType: string; guardianName?: string }[];
@@ -186,6 +189,9 @@ export async function registerMember(input: RegisterMemberInput) {
         isVolunteer: input.isVolunteer ?? false,
         volunteerAreas: (input.volunteerAreas ?? undefined) as Prisma.InputJsonValue,
         volunteerAvailability: input.volunteerAvailability,
+        favouriteTempleId: input.favouriteTempleId,
+        favouriteDharamshalaId: input.favouriteDharamshalaId,
+        favouriteBhojanshalaId: input.favouriteBhojanshalaId,
         siblings: (input.siblings ?? undefined) as Prisma.InputJsonValue,
         currencyCode: currencyForCountry(country),
         status: 'ACTIVE',
@@ -365,6 +371,9 @@ export async function updateMemberProfile(memberId: string, input: Partial<Regis
       isVolunteer: input.isVolunteer,
       volunteerAreas: input.volunteerAreas as Prisma.InputJsonValue,
       volunteerAvailability: input.volunteerAvailability,
+      favouriteTempleId: input.favouriteTempleId,
+      favouriteDharamshalaId: input.favouriteDharamshalaId,
+      favouriteBhojanshalaId: input.favouriteBhojanshalaId,
       siblings: input.siblings as Prisma.InputJsonValue,
       updatedById: memberId,
     },

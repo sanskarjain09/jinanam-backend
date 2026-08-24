@@ -44,6 +44,7 @@ export const submitBookingSchema = z.object({
     dateTo: z.coerce.date().optional(),
     slot: z.string().optional(),
     peopleCount: z.number().int().min(1).default(1),
+    quantity: z.number().int().min(1).default(1),
   }),
 });
 
@@ -51,6 +52,7 @@ export const bookingDecisionSchema = z.object({
   body: z.object({
     decision: z.enum(['APPROVE', 'REJECT', 'REQUEST_INFO']),
     reason: z.string().optional(),
+    allocatedRoomId: z.string().optional(),
   }),
 });
 
@@ -69,12 +71,12 @@ export const paymentVerificationSchema = z.object({
 
 export const myBookingsQuerySchema = z.object({
   query: z.object({
-    scope: z.enum(['upcoming', 'past', 'all']).default('all'),
+    scope: z.enum(['upcoming', 'active', 'past', 'all']).default('all'),
     month: z.coerce.number().int().min(1).max(12).optional(),
     year: z.coerce.number().int().optional(),
     categoryId: z.string().optional(),
     organizationId: z.string().optional(),
     page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    pageSize: z.coerce.number().int().min(1).max(100).default(50),
   }),
 });

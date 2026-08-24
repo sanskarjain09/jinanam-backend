@@ -23,6 +23,7 @@ export async function createWing(buildingId: string, name: string, floor?: strin
 export async function createRoom(wingId: string, input: {
   name: string;
   type: 'ROOM' | 'HALL' | 'DORMITORY';
+  category?: string;
   capacity: number;
   pricePerUnit?: number;
   currency?: string;
@@ -38,25 +39,37 @@ export async function createRoom(wingId: string, input: {
 }) {
   const wing = await prisma.wing.findUnique({ where: { id: wingId } });
   if (!wing || wing.deletedAt) throw ApiError.notFound('Wing not found');
-  return prisma.roomOrHall.create({
-    data: {
-      wingId,
-      name: input.name,
-      type: input.type,
-      capacity: input.capacity,
-      pricePerUnit: input.pricePerUnit ?? 0,
-      currency: input.currency ?? 'INR',
-      roomNumber: input.roomNumber,
-      viewType: input.viewType,
-      bathroomType: input.bathroomType,
-      bedType: input.bedType,
-      extraMattressCount: input.extraMattressCount,
-      extraMattressCharge: input.extraMattressCharge,
-      amenities: input.amenities as Prisma.InputJsonValue,
-      images: input.images as Prisma.InputJsonValue,
-      status: input.status ?? 'AVAILABLE',
-    },
-  });
+  
+  // If user inputs "101, 102, 103" we split it to create multiple physical room records.
+  const roomNumbers = input.roomNumber 
+    ? input.roomNumber.split(',').map(n => n.trim()).filter(Boolean) 
+    : [''];
+
+  const createdRooms = await Promise.all(roomNumbers.map(rn => {
+    return prisma.roomOrHall.create({
+      data: {
+        wingId,
+        name: input.name,
+        type: input.type,
+        category: input.category,
+        capacity: input.capacity,
+        pricePerUnit: input.pricePerUnit ?? 0,
+        currency: input.currency ?? 'INR',
+        roomNumber: rn || null,
+        roomCount: 1, // hardcode to 1 as it's a physical room now
+        viewType: input.viewType,
+        bathroomType: input.bathroomType,
+        bedType: input.bedType,
+        extraMattressCount: input.extraMattressCount,
+        extraMattressCharge: input.extraMattressCharge,
+        amenities: input.amenities as Prisma.InputJsonValue,
+        images: input.images as Prisma.InputJsonValue,
+        status: input.status ?? 'AVAILABLE',
+      },
+    });
+  }));
+  
+  return createdRooms[0];
 }
 
 export async function updateRoom(

@@ -67,7 +67,7 @@ export async function createAdminAccount(input: {
   });
 
   let modulesToGrant = input.grantedModules;
-  if (!modulesToGrant || modulesToGrant.length === 0) {
+  if (modulesToGrant === undefined) {
     if (['ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'JAIN_CENTER_ADMIN', 'MONK_ADMIN', 'BHOJANSHALA_ADMIN'].includes(input.role)) {
       modulesToGrant = Object.values(MODULES);
     } else {
@@ -75,7 +75,7 @@ export async function createAdminAccount(input: {
     }
   }
 
-  if (modulesToGrant && modulesToGrant.length > 0) {
+  if (modulesToGrant) {
     if (input.permissionLevel && input.organizationIds.length > 0) {
       for (const orgId of input.organizationIds) {
         await setOrgScopedAdminModuleGrants(user.id, orgId, modulesToGrant, input.permissionLevel, input.createdById);

@@ -337,27 +337,36 @@ export async function getOrganization(organizationId: string) {
     });
 
     const mappedBuildings = dbBuildings.map((b) => {
-      const roomTypes = b.wings.flatMap((w: any) =>
-        w.rooms.map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          category: r.category || (r.type === 'ROOM' ? 'AC' : 'Non-AC'),
-          type: r.type === 'DORMITORY' ? 'Dormitory' : r.type === 'HALL' ? 'Hall' : 'Private',
-          roomCount: r.roomCount ? String(r.roomCount) : '1',
-          bedCapacity: String(r.capacity),
-          charges: r.pricePerUnit ? String(r.pricePerUnit) : '0',
-          chargesType: r.chargesType || 'Per Room',
-          deposit: r.deposit ? String(r.deposit) : '0',
-          attachedBathroom: r.attachedBathroom || 'Yes',
-          amenities: Array.isArray(r.amenities) ? r.amenities : [],
-          roomNumber: r.roomNumber || '',
-          viewType: r.viewType || 'Garden',
-          bathroomType: r.bathroomType || 'Western',
-          bedType: r.bedType || 'Double Occupancy',
-          extraMattressCount: r.extraMattressCount || 0,
-          extraMattressCharge: r.extraMattressCharge ? Number(r.extraMattressCharge) : 0,
-        }))
-      );
+      const allRooms = b.wings.flatMap((w: any) => w.rooms);
+      const grouped = new Map<string, any>();
+      for (const r of allRooms) {
+        const key = `${r.name}|${r.category}|${r.type}|${r.pricePerUnit}|${r.capacity}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, { ...r, _actualCount: 1 });
+        } else {
+          grouped.get(key)._actualCount += 1;
+        }
+      }
+
+      const roomTypes = Array.from(grouped.values()).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        category: r.category || (r.type === 'ROOM' ? 'AC' : 'Non-AC'),
+        type: r.type === 'DORMITORY' ? 'Dormitory' : r.type === 'HALL' ? 'Hall' : 'Private',
+        roomCount: String(r._actualCount),
+        bedCapacity: String(r.capacity),
+        charges: r.pricePerUnit ? String(r.pricePerUnit) : '0',
+        chargesType: r.chargesType || 'Per Room',
+        deposit: r.deposit ? String(r.deposit) : '0',
+        attachedBathroom: r.attachedBathroom || 'Yes',
+        amenities: Array.isArray(r.amenities) ? r.amenities : [],
+        roomNumber: r.roomNumber || '',
+        viewType: r.viewType || 'Garden',
+        bathroomType: r.bathroomType || 'Western',
+        bedType: r.bedType || 'Double Occupancy',
+        extraMattressCount: r.extraMattressCount || 0,
+        extraMattressCharge: r.extraMattressCharge ? Number(r.extraMattressCharge) : 0,
+      }));
 
       return {
         id: b.id,

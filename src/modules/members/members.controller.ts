@@ -225,43 +225,10 @@ export const adminCreateMember = asyncHandler(async (req: Request, res: Response
 
   const errors: Record<string, string[]> = {};
   if (!firstName) errors.firstName = ['Required'];
-  if (!middleName) errors.middleName = ['Required'];
-  if (!surname) errors.surname = ['Required'];
   if (!mobile) errors.mobile = ['Required'];
-  if (!gender) errors.gender = ['Required'];
-  if (!dob) errors.dob = ['Required'];
-  if (!nationality) errors.nationality = ['Required'];
-  if (!pan) errors.pan = ['Required'];
-  else if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) errors.pan = ['Enter a valid 10-character PAN (e.g. ABCDE1234F)'];
-  if (!aadhaar) errors.aadhaar = ['Required'];
-  else if (!/^\d{12}$/.test(aadhaar)) errors.aadhaar = ['Aadhaar number must be exactly 12 digits'];
-  if (!maritalStatus) errors.maritalStatus = ['Required'];
 
-  if (!currentAddress) {
-    errors.currentAddress = ['Required'];
-  } else {
-    const addr = currentAddress as any;
-    if (!addr.line1 && !addr.address) errors['currentAddress.address'] = ['Required'];
-    if (!addr.country) errors['currentAddress.country'] = ['Required'];
-    if (!addr.pincode) errors['currentAddress.pincode'] = ['Required'];
-    if (!addr.area) errors['currentAddress.area'] = ['Required'];
-    if (!addr.city) errors['currentAddress.city'] = ['Required'];
-    if (!addr.district) errors['currentAddress.district'] = ['Required'];
-    if (!addr.state) errors['currentAddress.state'] = ['Required'];
-  }
-
-  if (!permanentAddress) {
-    errors.permanentAddress = ['Required'];
-  } else {
-    const addr = permanentAddress as any;
-    if (!addr.line1 && !addr.address) errors['permanentAddress.address'] = ['Required'];
-    if (!addr.country) errors['permanentAddress.country'] = ['Required'];
-    if (!addr.pincode) errors['permanentAddress.pincode'] = ['Required'];
-    if (!addr.area) errors['permanentAddress.area'] = ['Required'];
-    if (!addr.city) errors['permanentAddress.city'] = ['Required'];
-    if (!addr.district) errors['permanentAddress.district'] = ['Required'];
-    if (!addr.state) errors['permanentAddress.state'] = ['Required'];
-  }
+  if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) errors.pan = ['Enter a valid 10-character PAN (e.g. ABCDE1234F)'];
+  if (aadhaar && !/^\d{12}$/.test(aadhaar)) errors.aadhaar = ['Aadhaar number must be exactly 12 digits'];
 
   if (category === 'JAIN') {
     if (!motherTongue) errors.motherTongue = ['Required'];

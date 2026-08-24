@@ -489,7 +489,7 @@ model Organization {
   staffWorkingHoursStart     String?
   upashrayLocation           String?
   eventHallPurpose           String?
-  eventHallBookingLink       String?
+  eventHallImages            Json?
   eventHallBookingItemId     String?
   sect                       String?
   subSect                    String?
@@ -561,6 +561,7 @@ model Organization {
   facebookLink               String?
   youtubeLink                String?
   establishedDate            DateTime?
+  timeline                   Json?
   insideTempleType           TempleType?
   parentOrganizationId       String?
   announcements              Announcement[]
@@ -607,6 +608,10 @@ model Organization {
   permissionOverrides        UserPermissionOverride[]
   visitorEntries             VisitorEntry[]
   volunteerOpportunities     VolunteerOpportunity[]
+
+  dharamshalaSettings DharamshalaSettings?
+  accommodationRules  AccommodationRule[]
+  eventHalls          EventHall[]
 
   @@index([type])
   @@index([lat, lng])
@@ -808,6 +813,8 @@ model RoomOrHall {
   attachedBathroom    String?
   wing                Wing                 @relation(fields: [wingId], references: [id])
   tourRoomAssignments TourRoomAssignment[]
+  allocations         BookingAllocation[]
+  rules               AccommodationRule[]
 
   @@map("rooms_and_halls")
 }
@@ -946,7 +953,9 @@ model Member {
   currentLat                   Float?
   currentLng                   Float?
   visitFrequency               String?
-  favouriteOrganizationId      String?
+  favouriteTempleId            String?
+  favouriteDharamshalaId       String?
+  favouriteBhojanshalaId       String?
   bloodGroup                   String?
   disability                   String?
   medicalNotes                 String?
@@ -970,6 +979,7 @@ model Member {
   bhojanshalaPasses            BhojanshalaPass[]
   dharamshalaBookings          DharamshalaBooking[]
   pathshalaBookings            PathshalaBooking[]
+  eventHallBookings            EventHallBooking[]
   bookings                     Booking[]
   communityPageMemberships     CommunityPageMember[]
   donations                    Donation[]
@@ -1352,6 +1362,7 @@ model Booking {
   dateTo                 DateTime?
   slot                   String?
   peopleCount            Int                    @default(1)
+  quantity               Int                    @default(1)
   amount                 Decimal                @default(0) @db.Decimal(12, 2)
   currency               String                 @default("INR")
   status                 BookingStatus          @default(SUBMITTED)
@@ -1720,8 +1731,10 @@ model SimRecord {
 model Route {
   id          String       @id @default(cuid())
   name        String
-  monkId      String?
-  monkGroupId String?
+  monkId             String?
+  monkGroupId        String?
+  participantMonkIds Json?
+  contactPersonIds   Json?
   journeyDate DateTime
   stops       Json
   createdById String?
@@ -3051,10 +3064,37 @@ enum MealType {
 
 enum DharamshalaBookingStatus {
   PENDING
+  APPROVED
+  REJECTED
+  WAITING_LIST
+  RESERVED
   CONFIRMED
   CHECKED_IN
-  CANCELLED
   COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum BookingSource {
+  APP
+  WALK_IN
+  PHONE
+  ADMIN
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+  COMPLIMENTARY
+}
+
+enum PaymentType {
+  ADVANCE
+  FINAL
+  DEPOSIT_REFUND
 }
 
 model DharamshalaBooking {
@@ -3062,16 +3102,27 @@ model DharamshalaBooking {
   publicId        String                   @unique
   organizationId  String
   memberId        String
+  source          BookingSource            @default(APP)
+  bookingType     String                   @default("MEMBER") // MEMBER, VIP, MONK, TRUST, MAINTENANCE
   fromDate        DateTime
   toDate          DateTime
+  actualCheckIn   DateTime?
+  actualCheckOut  DateTime?
   numberOfRooms   Int                      @default(1)
   numberOfPersons Int                      @default(1)
   totalAmount     Decimal                  @default(0) @db.Decimal(12, 2)
+  depositAmount   Decimal                  @default(0) @db.Decimal(12, 2)
+  discount        Decimal                  @default(0) @db.Decimal(12, 2)
+  vehicleNumber   String?
+  remarks         String?
   status          DharamshalaBookingStatus @default(PENDING)
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
   member          Member                   @relation(fields: [memberId], references: [id])
   organization    Organization             @relation(fields: [organizationId], references: [id])
+
+  allocations BookingAllocation[]
+  payments    PaymentRecord[]
 
   @@index([organizationId, fromDate])
   @@index([memberId])
@@ -3100,4 +3151,108 @@ model PathshalaBooking {
   @@index([organizationId, date])
   @@index([memberId])
   @@map("pathshala_bookings")
+}
+
+model BookingAllocation {
+  id             String             @id @default(cuid())
+  bookingId      String
+  roomOrHallId   String
+  startDate      DateTime
+  endDate        DateTime
+  numberOfGuests Int                @default(1)
+  booking        DharamshalaBooking @relation(fields: [bookingId], references: [id])
+  roomOrHall     RoomOrHall         @relation(fields: [roomOrHallId], references: [id])
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([bookingId])
+  @@index([roomOrHallId])
+  @@map("booking_allocations")
+}
+
+model PaymentRecord {
+  id             String             @id @default(cuid())
+  bookingId      String
+  amount         Decimal            @db.Decimal(12, 2)
+  mode           PaymentMode        @default(CASH)
+  type           PaymentType        @default(FINAL)
+  receiptUrl     String?
+  transactionRef String?
+  booking        DharamshalaBooking @relation(fields: [bookingId], references: [id])
+  createdAt      DateTime           @default(now())
+
+  @@index([bookingId])
+  @@map("payment_records")
+}
+
+model DharamshalaSettings {
+  id                 String       @id @default(cuid())
+  organizationId     String       @unique
+  trustName          String?
+  bankDetails        String?
+  upiDetails         String?
+  cancellationPolicy String?      @db.Text
+  receiptTerms       String?      @db.Text
+  receiptFooter      String?      @db.Text
+  stampUrl           String?
+  signatureUrl       String?
+  authorizedPerson   String?
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@map("dharamshala_settings")
+}
+
+model AccommodationRule {
+  id             String       @id @default(cuid())
+  organizationId String
+  roomOrHallId   String?
+  ruleType       String // e.g. JAIN_ONLY, NO_PETS
+  notes          String?      @db.Text
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  roomOrHall     RoomOrHall?  @relation(fields: [roomOrHallId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@map("accommodation_rules")
+}
+
+model EventHall {
+  id              String         @id @default(cuid())
+  organizationId  String
+  name            String
+  price           Decimal?       @db.Decimal(12, 2)
+  roomCount       Int            @default(0)
+  foodAvailable   Boolean        @default(false)
+  facilities      String?
+  images          Json?
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  bookings        EventHallBooking[]
+
+  @@map("event_halls")
+}
+
+model EventHallBooking {
+  id              String         @id @default(cuid())
+  eventHallId     String
+  memberId        String
+  bookingDate     DateTime
+  timeSlot        String?
+  status          BookingStatus  @default(SUBMITTED)
+  amountPaid      Decimal?       @db.Decimal(12, 2)
+  guestCount      Int            @default(1)
+  specialRequests String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  eventHall       EventHall      @relation(fields: [eventHallId], references: [id])
+  member          Member         @relation(fields: [memberId], references: [id])
+
+  @@map("event_hall_bookings")
 }

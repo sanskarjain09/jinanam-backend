@@ -22,6 +22,11 @@ export const listBookingItems = asyncHandler(async (req: Request, res: Response)
   return ok(res, items);
 });
 
+export const listPublicBookingItems = asyncHandler(async (req: Request, res: Response) => {
+  const items = await bookingsService.listPublicBookingItems(req.params.organizationId as string);
+  return ok(res, items);
+});
+
 export const updateBookingItem = asyncHandler(async (req: Request, res: Response) => {
   const item = await bookingsService.updateBookingItem(req.params.itemId as string, req.body, req.actor!.userId);
   return ok(res, item);
@@ -56,7 +61,7 @@ export const submitBooking = asyncHandler(async (req: Request, res: Response) =>
 });
 
 export const decideBooking = asyncHandler(async (req: Request, res: Response) => {
-  const booking = await bookingsService.decideBooking(req.params.bookingId as string, req.body.decision, req.actor!.userId, req.body.reason);
+  const booking = await bookingsService.decideBooking(req.params.bookingId as string, req.body.decision, req.actor!.userId, req.body.reason, req.body.allocatedRoomId);
   await recordAudit({
     ...auditContextFromRequest(req),
     organizationId: booking.organizationId,
@@ -225,8 +230,18 @@ export const checkOutBooking = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const transferRoom = asyncHandler(async (req: Request, res: Response) => {
-  const booking = await bookingsService.transferRoom(req.params.bookingId as string, req.body.newRoomId, req.body.reason, req.actor!.userId);
-  return ok(res, booking);
+  const row = await bookingsService.transferRoom(req.params.bookingId as string, req.body.newRoomId, req.body.reason, req.actor!.userId);
+  return ok(res, row);
+});
+
+export const listOrgRooms = asyncHandler(async (req: Request, res: Response) => {
+  const rooms = await bookingsService.listOrgRooms(req.params.organizationId as string, req.query.category as string, req.query.status as any);
+  return ok(res, rooms);
+});
+
+export const updateRoomStatus = asyncHandler(async (req: Request, res: Response) => {
+  const room = await bookingsService.updateRoomStatus(req.params.organizationId as string, req.params.roomId as string, req.body.status as any);
+  return ok(res, room);
 });
 
 export const extendStay = asyncHandler(async (req: Request, res: Response) => {

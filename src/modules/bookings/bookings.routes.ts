@@ -19,6 +19,7 @@ export const bookingRoutes = Router();
 
 // Booking item configuration (org admins)
 bookingRoutes.get('/items/org/:organizationId', requireAuth, requirePermission('BOOKINGS', 'VIEW'), scopeToOrganization, bookingsController.listBookingItems);
+bookingRoutes.get('/items/public/org/:organizationId', requireAuth, bookingsController.listPublicBookingItems);
 bookingRoutes.post('/items', requireAuth, requirePermission('BOOKINGS', 'CREATE'), scopeToOrganization, validate(createBookingItemSchema), bookingsController.createBookingItem);
 bookingRoutes.patch('/items/:itemId', requireAuth, requirePermission('BOOKINGS', 'EDIT'), validate(updateBookingItemSchema), bookingsController.updateBookingItem);
 bookingRoutes.post('/items/:itemId/blackout-dates', requireAuth, requirePermission('BOOKINGS', 'EDIT'), validate(addBlackoutDateSchema), bookingsController.addBlackoutDate);
@@ -42,6 +43,10 @@ bookingRoutes.post('/:bookingId/payment-verification', requireAuth, requirePermi
 // Org occupancy / admin listing (+ export variant per §7)
 bookingRoutes.get('/org/:organizationId', requireAuth, requirePermission('BOOKINGS', 'VIEW'), scopeToOrganization, bookingsController.orgBookings);
 bookingRoutes.get('/org/:organizationId/export', requireAuth, requirePermission('BOOKINGS', 'VIEW'), scopeToOrganization, bookingsController.orgBookingsExport);
+
+// Room management
+bookingRoutes.get('/org/:organizationId/rooms', requireAuth, requirePermission('BOOKINGS', 'VIEW'), scopeToOrganization, bookingsController.listOrgRooms);
+bookingRoutes.patch('/org/:organizationId/rooms/:roomId/status', requireAuth, requirePermission('BOOKINGS', 'EDIT'), scopeToOrganization, bookingsController.updateRoomStatus);
 
 // Stay Operations (Front Desk Daily Operations — Pillar 3)
 bookingRoutes.post('/:bookingId/check-in', requireAuth, requirePermission('BOOKINGS', 'EDIT'), bookingsController.checkInBooking);

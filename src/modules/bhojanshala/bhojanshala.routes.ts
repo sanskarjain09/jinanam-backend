@@ -4,8 +4,25 @@ import { validate } from '@/middlewares/validate';
 import { asyncHandler } from '@/utils/asyncHandler';
 import { z } from 'zod';
 import * as bhojanshalaController from './bhojanshala.controller';
-import { createOrganizationSchema, updateOrganizationSchema } from '@/modules/temples/organizations.dto';
-import { makeOrganizationController } from '@/modules/temples/organizations.controller';
+import {
+  createOrganizationSchema,
+  updateOrganizationSchema,
+  addContactSchema,
+  addGalleryImageSchema,
+  addTrusteeSchema,
+  addVolunteerSchema,
+  addReviewSchema,
+  replyReviewSchema,
+  publishReviewSchema,
+  addNoticeSchema,
+  addDhajaRecordSchema,
+  reportIncorrectInfoSchema,
+  addTempleAnnouncementSchema,
+} from '@/modules/temples/organizations.dto';
+import { makeOrganizationController, orgExtras } from '@/modules/temples/organizations.controller';
+import multer from 'multer';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const router = Router();
 // Passes (Specific routes first)
@@ -22,6 +39,51 @@ router.post('/', requireAuth, requireRole('SUPER_ADMIN'), validate(createOrganiz
 router.get('/', requireAuth, orgCtrl.list);
 router.get('/:organizationId', requireAuth, orgCtrl.get);
 router.patch('/:organizationId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(updateOrganizationSchema), orgCtrl.update);
+
+const extra = orgExtras('BHOJANSHALA');
+
+// Logo upload
+router.post('/:organizationId/logo', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, upload.single('logo'), extra.uploadLogo);
+
+// Gallery
+router.post('/:organizationId/gallery', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(addGalleryImageSchema), orgCtrl.addGalleryImage);
+router.post('/:organizationId/gallery/bulk', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, upload.array('images', 20), extra.bulkUploadGallery);
+router.delete('/:organizationId/gallery/:imageId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, extra.deleteGalleryImage);
+
+// Trustees
+router.post('/:organizationId/trustees', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(addTrusteeSchema), orgCtrl.addTrustee);
+router.delete('/:organizationId/trustees/:trusteeId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, extra.deleteTrustee);
+
+// Volunteers
+router.post('/:organizationId/volunteers', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(addVolunteerSchema), orgCtrl.addVolunteer);
+
+// Contacts — add, delete
+router.post('/:organizationId/contacts', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(addContactSchema), orgCtrl.addContact);
+router.delete('/:organizationId/contacts/:contactId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, extra.deleteContact);
+
+// Dhaja
+router.post('/:organizationId/dhaja', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(addDhajaRecordSchema), orgCtrl.addDhajaRecord);
+router.patch('/:organizationId/dhaja/:dhajaRecordId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(addDhajaRecordSchema), orgCtrl.updateDhajaRecord);
+router.delete('/:organizationId/dhaja/:dhajaId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, extra.deleteDhaja);
+
+// Reviews
+router.post('/:organizationId/reviews', requireAuth, validate(addReviewSchema), orgCtrl.addReview);
+router.patch('/reviews/:reviewId/reply', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), validate(replyReviewSchema), orgCtrl.replyReview);
+router.patch('/reviews/:reviewId/publish', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), validate(publishReviewSchema), orgCtrl.publishReview);
+router.delete('/reviews/:reviewId', requireAuth, requireRole('SUPER_ADMIN'), orgCtrl.hideReview);
+
+// Notices
+router.post('/:organizationId/notices', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(addNoticeSchema), orgCtrl.addNotice);
+router.delete('/:organizationId/notices/:noticeId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, extra.deleteNotice);
+
+// Announcements
+router.post('/:organizationId/announcements', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(addTempleAnnouncementSchema), orgCtrl.addAnnouncement);
+router.delete('/:organizationId/announcements/:announcementId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, extra.deleteAnnouncement);
+
+// Follow / Unfollow
+router.post('/:organizationId/follow', requireAuth, orgCtrl.follow);
+router.post('/:organizationId/unfollow', requireAuth, orgCtrl.unfollow);
+router.post('/:organizationId/report-incorrect-info', requireAuth, validate(reportIncorrectInfoSchema), orgCtrl.reportIncorrectInfo);
 
 // Zod schemas for validation
 const updateTimingsSchema = z.object({

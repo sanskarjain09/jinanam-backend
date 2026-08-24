@@ -11,6 +11,7 @@ export const createRoomSchema = z.object({
     pricePerUnit: z.number().min(0).default(0),
     currency: z.string().default('INR'),
     roomNumber: z.string().optional(),
+    category: z.string().optional(),
     viewType: z.string().optional(),
     bathroomType: z.string().optional(),
     bedType: z.string().optional(),

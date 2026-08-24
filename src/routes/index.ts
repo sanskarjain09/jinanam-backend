@@ -44,6 +44,7 @@ import { dashboardRoutes } from '@/modules/dashboard/dashboard.routes';
 import { masterDataRoutes } from '@/modules/masterData/masterData.routes';
 import { searchRoutes } from '@/modules/search/search.routes';
 import { uploadRoutes } from '@/modules/uploads/uploads.routes';
+import eventHallRoutes from '@/modules/eventHalls/eventHalls.routes';
 // New admin panel modules
 import { faqRoutes } from '@/modules/faqs/faqs.routes';
 import { chaturmasRoutes } from '@/modules/chaturmas/chaturmas.routes';
@@ -106,6 +107,7 @@ export function registerRoutes(app: Express) {
   v1.use('/master-data', masterDataRoutes);
   v1.use('/search', searchRoutes);
   v1.use('/uploads', uploadRoutes);
+  v1.use('/event-halls', eventHallRoutes);
   // New admin panel modules
   v1.use('/faqs', faqRoutes);
   v1.use('/chaturmas', chaturmasRoutes);

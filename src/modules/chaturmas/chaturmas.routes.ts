@@ -176,6 +176,9 @@ chaturmasRoutes.get(
       status: computeDisplayStatus(r.startDate, r.endDate),
       orgId: r.organizationId,
       orgName: r.organization?.name ?? null,
+      locationName: r.locationName,
+      contactPerson: r.contactPerson,
+      contactMobile: r.contactMobile,
       city: r.organization?.city ?? null,
       state: r.organization?.state ?? null,
     }));
@@ -213,9 +216,12 @@ chaturmasRoutes.post(
     }
     if (!monkName) monkName = 'Custom MS Record';
 
+    const year = rest.year || (rest.startDate ? new Date(rest.startDate).getFullYear() : new Date().getFullYear());
+
     const plan = await prisma.chaturmasPlan.create({
       data: {
         ...rest,
+        year,
         monkIds: monkIds || undefined,
         monkName,
         createdById: req.actor!.userId,
@@ -290,10 +296,16 @@ chaturmasRoutes.patch(
       monkName = monks.map((m) => m.dikshaName).join(', ');
     }
 
+    let updatedYear = rest.year;
+    if (!updatedYear && rest.startDate) {
+      updatedYear = new Date(rest.startDate).getFullYear();
+    }
+
     const updated = await prisma.chaturmasPlan.update({
       where: { id: req.params.id },
       data: {
         ...rest,
+        ...(updatedYear ? { year: updatedYear } : {}),
         monkIds: monkIds !== undefined ? monkIds : undefined,
         ...(monkName ? { monkName } : {}),
       },

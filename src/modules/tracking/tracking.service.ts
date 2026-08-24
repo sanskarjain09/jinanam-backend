@@ -43,13 +43,15 @@ export async function ingestLocationPing(input: { deviceId: string; lat: number;
 // Routes (§5.10): A→B→C→D multi-stop builder
 // -----------------------------------------------------------------------------
 
-export async function createRoute(input: { name: string; monkId?: string; monkGroupId?: string; journeyDate: Date; stops: unknown[]; createdById: string }) {
+export async function createRoute(input: { name: string; monkId?: string; monkGroupId?: string; participantMonkIds?: string[]; contactPersonIds?: string[]; journeyDate: Date; stops: unknown[]; createdById: string }) {
   const stops = (input.stops as any[]).map((s, i) => ({ ...s, order: s.order ?? i, status: 'PENDING' }));
   return prisma.route.create({
     data: {
       name: input.name,
       monkId: input.monkId || null,
       monkGroupId: input.monkGroupId || null,
+      participantMonkIds: input.participantMonkIds ? (input.participantMonkIds as Prisma.InputJsonValue) : undefined,
+      contactPersonIds: input.contactPersonIds ? (input.contactPersonIds as Prisma.InputJsonValue) : undefined,
       journeyDate: input.journeyDate,
       stops: stops as Prisma.InputJsonValue,
       createdById: input.createdById,
@@ -57,12 +59,18 @@ export async function createRoute(input: { name: string; monkId?: string; monkGr
   });
 }
 
-export async function updateRoute(routeId: string, input: Partial<{ name: string; journeyDate: Date; stops: unknown[] }>) {
+export async function updateRoute(routeId: string, input: Partial<{ name: string; journeyDate: Date; participantMonkIds?: string[]; contactPersonIds?: string[]; stops: unknown[] }>) {
   const route = await prisma.route.findUnique({ where: { id: routeId } });
   if (!route || route.deletedAt) throw ApiError.notFound('Route not found');
   return prisma.route.update({
     where: { id: routeId },
-    data: { name: input.name, journeyDate: input.journeyDate, stops: input.stops as Prisma.InputJsonValue },
+    data: { 
+      name: input.name, 
+      journeyDate: input.journeyDate, 
+      participantMonkIds: input.participantMonkIds ? (input.participantMonkIds as Prisma.InputJsonValue) : undefined,
+      contactPersonIds: input.contactPersonIds ? (input.contactPersonIds as Prisma.InputJsonValue) : undefined,
+      stops: input.stops as Prisma.InputJsonValue 
+    },
   });
 }
 

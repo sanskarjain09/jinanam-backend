@@ -29,8 +29,46 @@ export async function createBookingItem(input: Record<string, unknown> & { organ
 export async function listBookingItems(organizationId: string) {
   return prisma.bookingItem.findMany({
     where: { organizationId, deletedAt: null },
-    select: { id: true, name: true, categoryId: true, type: true, status: true },
+    include: { category: true },
     orderBy: { name: 'asc' },
+  });
+}
+
+export async function listPublicBookingItems(organizationId: string) {
+  // Fetch active booking items for the organization
+  const bookingItems = await prisma.bookingItem.findMany({
+    where: { organizationId, status: 'ACTIVE', deletedAt: null },
+    include: { category: true },
+    orderBy: { name: 'asc' },
+  });
+
+  // Fetch all rooms for this org to calculate availability and extract amenities
+  const allRooms = await prisma.roomOrHall.findMany({
+    where: { wing: { building: { organizationId } }, deletedAt: null },
+  });
+
+  return bookingItems.map((item) => {
+    const matchingRooms = allRooms.filter(r => r.name === item.name);
+    const availableRoomsCount = matchingRooms.filter(r => r.status === 'AVAILABLE').length;
+    // Extract unique amenities from matching rooms
+    const amenitiesSet = new Set<string>();
+    for (const r of matchingRooms) {
+      if (Array.isArray(r.amenities)) {
+        for (const a of r.amenities) amenitiesSet.add(String(a));
+      }
+    }
+    const amenities = Array.from(amenitiesSet);
+    
+    // Check attached bathroom
+    const attachedBathroom = matchingRooms.some(r => r.attachedBathroom?.toLowerCase() === 'yes' || r.attachedBathroom?.toLowerCase() === 'true');
+
+    return {
+      ...item,
+      availableRoomsCount,
+      totalRoomsCount: matchingRooms.length,
+      amenities,
+      attachedBathroom
+    };
   });
 }
 
@@ -71,21 +109,26 @@ export async function getAvailabilityCalendar(bookingItemId: string, from: Date,
   const item = await prisma.bookingItem.findUnique({ where: { id: bookingItemId } });
   if (!item || item.deletedAt) throw ApiError.notFound('Booking item not found');
 
-  const [blackouts, internalReservations, bookings] = await Promise.all([
+  const [blackouts, internalReservations, bookings, physicalRoomsCount] = await Promise.all([
     prisma.bookingBlackoutDate.findMany({ where: { bookingItemId, date: { gte: from, lte: to } } }),
     prisma.bookingInternalReservation.findMany({ where: { bookingItemId, date: { gte: from, lte: to } } }),
     prisma.booking.findMany({
       where: {
         bookingItemId,
         deletedAt: null,
-        status: { in: ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'PAYMENT_PENDING', 'PAYMENT_VERIFICATION', 'CONFIRMED'] },
+        status: { in: ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'PAYMENT_PENDING', 'PAYMENT_VERIFICATION', 'CONFIRMED', 'CHECKED_IN'] },
         dateFrom: { lte: to },
         OR: [{ dateTo: { gte: from } }, { dateTo: null, dateFrom: { gte: from } }],
       },
     }),
+    prisma.roomOrHall.count({
+      where: { wing: { building: { organizationId: item.organizationId } }, name: item.name, status: 'AVAILABLE', deletedAt: null }
+    })
   ]);
 
-  const days: { date: string; status: DayAvailability; internalDetails?: string }[] = [];
+  const maxCapacity = physicalRoomsCount > 0 ? physicalRoomsCount : (item.capacityMaxBookings || 999);
+
+  const days: { date: string; status: DayAvailability; availableCount: number; internalDetails?: string }[] = [];
   const cursor = new Date(from);
   cursor.setHours(0, 0, 0, 0);
   const end = new Date(to);
@@ -95,20 +138,25 @@ export async function getAvailabilityCalendar(bookingItemId: string, from: Date,
     const dayKey = cursor.toISOString().slice(0, 10);
     const isBlackout = blackouts.some((b) => b.date.toISOString().slice(0, 10) === dayKey);
     const internal = internalReservations.find((r) => r.date.toISOString().slice(0, 10) === dayKey);
+    
+    // Sum up the quantity of rooms booked for this day
     const dayBookingsCount = bookings.filter((b) => {
       const bookFrom = b.dateFrom.toISOString().slice(0, 10);
       const bookTo = (b.dateTo ?? b.dateFrom).toISOString().slice(0, 10);
       return dayKey >= bookFrom && dayKey <= bookTo;
-    }).length;
+    }).reduce((sum, b) => sum + (b.quantity || 1), 0);
+
+    const availableCount = Math.max(0, maxCapacity - dayBookingsCount);
 
     let status: DayAvailability = 'AVAILABLE';
     if (isBlackout) status = 'MAINTENANCE';
-    else if (internal) status = options.isAdmin ? 'RESERVED' : 'UNAVAILABLE'; // members never see internal details
-    else if (item.capacityMaxBookings && dayBookingsCount >= item.capacityMaxBookings) status = 'BOOKED';
+    else if (internal) status = options.isAdmin ? 'RESERVED' : 'UNAVAILABLE';
+    else if (availableCount <= 0) status = 'BOOKED';
 
     days.push({
       date: dayKey,
       status,
+      availableCount,
       ...(options.isAdmin && internal ? { internalDetails: internal.reason } : {}),
     });
     cursor.setDate(cursor.getDate() + 1);
@@ -135,7 +183,7 @@ async function pushStatus(bookingId: string, status: BookingStatus, changedById?
     .catch(() => {});
 }
 
-export async function submitBooking(memberId: string, input: { bookingItemId: string; dateFrom: Date; dateTo?: Date; slot?: string; peopleCount: number }) {
+export async function submitBooking(memberId: string, input: { bookingItemId: string; dateFrom: Date; dateTo?: Date; slot?: string; peopleCount: number; quantity?: number }) {
   const item = await prisma.bookingItem.findUnique({ where: { id: input.bookingItemId } });
   if (!item || item.deletedAt || item.status !== 'ACTIVE') throw ApiError.notFound('Booking item not available');
 
@@ -147,6 +195,35 @@ export async function submitBooking(memberId: string, input: { bookingItemId: st
   const calendar = await getAvailabilityCalendar(input.bookingItemId, input.dateFrom, input.dateTo ?? input.dateFrom, { isAdmin: false });
   const unavailable = calendar.days.find((d) => d.status !== 'AVAILABLE');
   if (unavailable) throw ApiError.conflict(`Selected date ${unavailable.date} is not available (${unavailable.status})`);
+
+  const qty = input.quantity || 1;
+
+  // Check physical available rooms count if it's tied to RoomOrHall
+  const availableRooms = await prisma.roomOrHall.count({
+    where: { wing: { building: { organizationId: item.organizationId } }, name: item.name, status: 'AVAILABLE', deletedAt: null },
+  });
+  // Fallback to item.capacityMaxBookings if no matching physical rooms found (maybe it's a generic item)
+  if (availableRooms > 0 && qty > availableRooms) {
+    throw ApiError.validation({ quantity: [`Only ${availableRooms} rooms available`] });
+  } else if (item.capacityMaxBookings && qty > item.capacityMaxBookings) {
+    throw ApiError.validation({ quantity: [`Only ${item.capacityMaxBookings} bookings available`] });
+  }
+  const baseAmount = item.type === 'PAID' ? Number(item.chargeAmount) : 0;
+
+  let days = 1;
+  if (input.dateTo) {
+    const fromDate = new Date(input.dateFrom);
+    const toDate = new Date(input.dateTo);
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(0, 0, 0, 0);
+    const diffTime = toDate.getTime() - fromDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) {
+      days = diffDays;
+    }
+  }
+
+  const totalAmount = baseAmount * qty * days;
 
   const booking = await prisma.$transaction(async (tx) => {
     const publicId = await nextPublicId('BOOKING', tx);
@@ -160,7 +237,8 @@ export async function submitBooking(memberId: string, input: { bookingItemId: st
         dateTo: input.dateTo,
         slot: input.slot,
         peopleCount: input.peopleCount,
-        amount: item.type === 'PAID' ? item.chargeAmount : 0,
+        quantity: qty,
+        amount: totalAmount,
         currency: item.currency,
         status: 'PENDING_APPROVAL',
       },
@@ -182,7 +260,7 @@ export async function submitBooking(memberId: string, input: { bookingItemId: st
   return booking;
 }
 
-export async function decideBooking(bookingId: string, decision: 'APPROVE' | 'REJECT' | 'REQUEST_INFO', actorUserId: string, reason?: string) {
+export async function decideBooking(bookingId: string, decision: 'APPROVE' | 'REJECT' | 'REQUEST_INFO', actorUserId: string, reason?: string, allocatedRoomId?: string) {
   const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { bookingItem: true, member: true } });
   if (!booking) throw ApiError.notFound('Booking not found');
   if (booking.status !== 'PENDING_APPROVAL') throw ApiError.conflict(`Cannot decide a booking in status ${booking.status}`);
@@ -217,7 +295,7 @@ export async function decideBooking(bookingId: string, decision: 'APPROVE' | 'RE
     const expiresAt = addHours(new Date(), booking.bookingItem.paymentWindowHours);
     const updated = await prisma.booking.update({
       where: { id: bookingId },
-      data: { status: 'PAYMENT_PENDING', paymentWindowExpiresAt: expiresAt, updatedById: actorUserId },
+      data: { status: 'PAYMENT_PENDING', paymentWindowExpiresAt: expiresAt, updatedById: actorUserId, allocatedRoomId },
     });
     await pushStatus(bookingId, 'APPROVED', actorUserId);
     await pushStatus(bookingId, 'PAYMENT_PENDING', actorUserId);
@@ -239,7 +317,7 @@ export async function decideBooking(bookingId: string, decision: 'APPROVE' | 'RE
     return updated;
   }
 
-  const updated = await prisma.booking.update({ where: { id: bookingId }, data: { status: 'CONFIRMED', updatedById: actorUserId } });
+  const updated = await prisma.booking.update({ where: { id: bookingId }, data: { status: 'CONFIRMED', updatedById: actorUserId, allocatedRoomId } });
   await pushStatus(bookingId, 'APPROVED', actorUserId);
   await pushStatus(bookingId, 'CONFIRMED', actorUserId);
   await issueBookingReceipt(bookingId);
@@ -304,6 +382,17 @@ export async function verifyPayment(bookingId: string, decision: 'APPROVE' | 'RE
 
   const updated = await prisma.booking.update({ where: { id: bookingId }, data: { status: 'CONFIRMED', updatedById: actorUserId } });
   await pushStatus(bookingId, 'CONFIRMED', actorUserId);
+
+  // Auto-occupy the assigned room if any
+  if (booking.allocatedRoomId) {
+    const roomIds = booking.allocatedRoomId.split(',').filter(Boolean);
+    if (roomIds.length > 0) {
+      await prisma.roomOrHall.updateMany({
+        where: { id: { in: roomIds } },
+        data: { status: 'OCCUPIED' }
+      });
+    }
+  }
 
   // Cancel the pending expiry job — payment completed in time
   const job = await getQueue(QUEUE_NAMES.BOOKING_PAYMENT_WINDOW).getJob(`booking-expiry-${bookingId}`);
@@ -389,7 +478,7 @@ async function issueBookingReceipt(bookingId: string) {
 // My Bookings (§5.7): unified across orgs/categories, past auto-scoped, never deleted
 // -----------------------------------------------------------------------------
 
-export async function listMyBookings(memberId: string, query: { scope: 'upcoming' | 'past' | 'all'; month?: number; year?: number; categoryId?: string; organizationId?: string; page: number; pageSize: number }) {
+export async function listMyBookings(memberId: string, query: { scope: 'upcoming' | 'active' | 'past' | 'all'; month?: number; year?: number; categoryId?: string; organizationId?: string; page: number; pageSize: number }) {
   const now = new Date();
   const where: Prisma.BookingWhereInput = {
     memberId,
@@ -399,10 +488,11 @@ export async function listMyBookings(memberId: string, query: { scope: 'upcoming
   };
 
   if (query.scope === 'upcoming') {
-    where.dateFrom = { gte: now };
-    where.status = { notIn: ['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'] };
+    where.status = { notIn: ['CHECKED_IN', 'CHECKED_OUT', 'COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'] };
+  } else if (query.scope === 'active') {
+    where.status = { in: ['CHECKED_IN'] };
   } else if (query.scope === 'past') {
-    where.OR = [{ dateFrom: { lt: now } }, { status: { in: ['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'] } }];
+    where.status = { in: ['CHECKED_OUT', 'COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'] };
   }
 
   if (query.month && query.year) {
@@ -533,11 +623,13 @@ export async function checkOutBooking(bookingId: string, input: {
   });
 
   if (booking.allocatedRoomId) {
-    await prisma.roomOrHall.update({ where: { id: booking.allocatedRoomId }, data: { status: 'DIRTY' } }).catch(() => {});
+    const ids = booking.allocatedRoomId.split(',').map(id => id.trim()).filter(Boolean);
+    if (ids.length > 0) {
+      await prisma.roomOrHall.updateMany({ where: { id: { in: ids } }, data: { status: 'DIRTY' } }).catch(() => {});
+    }
   }
 
   await pushStatus(bookingId, 'CHECKED_OUT', actorUserId, `Checked out at front desk`);
-  await issueBookingReceipt(bookingId);
 
   await enqueueNotification({
     userId: booking.member.userId,
@@ -599,4 +691,24 @@ export async function extendStay(bookingId: string, additionalDays: number, acto
 
 export async function updateHousekeepingStatus(roomId: string, status: 'AVAILABLE' | 'OCCUPIED' | 'DIRTY' | 'UNDER_CLEANING' | 'READY' | 'MAINTENANCE') {
   return prisma.roomOrHall.update({ where: { id: roomId }, data: { status } });
+}
+
+export async function listOrgRooms(organizationId: string, category?: string, status?: any) {
+  return await prisma.roomOrHall.findMany({
+    where: {
+      wing: { building: { organizationId } },
+      ...(category ? { category } : {}),
+      ...(status ? { status } : {}),
+      deletedAt: null
+    },
+    orderBy: { name: 'asc' },
+    include: { wing: true }
+  });
+}
+
+export async function updateRoomStatus(organizationId: string, roomId: string, status: any) {
+  return await prisma.roomOrHall.update({
+    where: { id: roomId },
+    data: { status }
+  });
 }

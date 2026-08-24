@@ -566,10 +566,7 @@ export async function memberEvents(memberId: string, query: { scope: string; org
         where: {
           deletedAt: null,
           status: { in: ['PUBLISHED', 'RSVP_SALES_OPEN', 'LIVE'] },
-          OR: [
-            { endAt: { gte: now } },
-            { endAt: null as any, startAt: { gte: new Date(now.getTime() - 2 * 3600_000) } }
-          ],
+          endAt: { gte: now },
           organizationId: query.organizationId
         },
         include: { organization: { select: { name: true } }, category: true, rsvps: { where: { memberId }, select: { status: true } } },
