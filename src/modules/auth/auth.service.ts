@@ -24,10 +24,10 @@ const SUSPICIOUS_DEVICE_THRESHOLD = 3; // distinct devices active within window 
 const SUSPICIOUS_WINDOW_HOURS = 24;
 const SUSPICIOUS_FAILED_LOGIN_THRESHOLD = 5;
 
-export async function requestOtpForPurpose(mobile: string, purpose: 'LOGIN' | 'REGISTER') {
+export async function requestOtpForPurpose(mobile: string, purpose: 'LOGIN' | 'REGISTER' | 'RESET_PASSWORD') {
   const existingUser = await prisma.user.findUnique({ where: { mobile } });
 
-  if (purpose === 'LOGIN' && !existingUser) {
+  if ((purpose === 'LOGIN' || purpose === 'RESET_PASSWORD') && !existingUser) {
     throw ApiError.notFound('This mobile number is not registered. Please register first.');
   }
   if (purpose === 'REGISTER' && existingUser) {
@@ -120,7 +120,7 @@ async function notifySuperAdminsOfSuspiciousActivity(mobile: string, stats: { di
 export async function verifyOtpAndAuthenticate(input: {
   mobile: string;
   otp: string;
-  purpose: 'LOGIN' | 'REGISTER';
+  purpose: 'LOGIN' | 'REGISTER' | 'RESET_PASSWORD';
   device: DeviceMeta;
 }) {
   await checkOtp(input.mobile, input.otp);
@@ -405,5 +405,64 @@ export async function loginWithGoogle(input: {
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
   return { user, accessToken, refreshToken, suspicious };
+}
+
+export async function setPassword(userId: string, password: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw ApiError.notFound('User not found');
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
+  return { success: true };
+}
+
+export async function changePassword(userId: string, oldPassword: string, newPassword: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw ApiError.notFound('User not found');
+
+  if (!user.passwordHash) {
+    throw ApiError.badRequest('No password set. Please use set password option.');
+  }
+
+  const valid = await bcrypt.compare(oldPassword, user.passwordHash);
+  if (!valid) {
+    throw ApiError.unauthorized('Incorrect old password');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
+  return { success: true };
+}
+
+export async function forgotPasswordReset(mobile: string, otp: string, newPassword: string) {
+  // Check OTP
+  await checkOtp(mobile, otp);
+
+  const user = await prisma.user.findUnique({ where: { mobile } });
+  if (!user) {
+    throw ApiError.notFound('This mobile number is not registered.');
+  }
+
+  if (['INACTIVE', 'SUSPENDED', 'BLOCKED', 'DELETED'].includes(user.status)) {
+    throw ApiError.forbidden(`Account is ${user.status.toLowerCase()}. Contact support.`);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { 
+      passwordHash,
+      failedLoginAttempts: 0,
+      lockoutUntil: null
+    },
+  });
+
+  return { success: true };
 }
 

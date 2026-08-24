@@ -126,6 +126,23 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   return ok(res, { loggedOut: true });
 });
 
+export const setPassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await authService.setPassword(req.actor!.userId, req.body.password);
+  return ok(res, result);
+});
+
+export const changePassword = asyncHandler(async (req: Request, res: Response) => {
+  const { oldPassword, newPassword } = req.body;
+  const result = await authService.changePassword(req.actor!.userId, oldPassword, newPassword);
+  return ok(res, result);
+});
+
+export const forgotPasswordReset = asyncHandler(async (req: Request, res: Response) => {
+  const { mobile, otp, newPassword } = req.body;
+  const result = await authService.forgotPasswordReset(mobile, otp, newPassword);
+  return ok(res, result);
+});
+
 export const me = asyncHandler(async (req: Request, res: Response) => {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: req.actor!.userId },

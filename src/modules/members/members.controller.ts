@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { asyncHandler } from '@/utils/asyncHandler';
 import { ok, created } from '@/utils/apiResponse';
 import { ApiError } from '@/utils/ApiError';
@@ -215,6 +216,7 @@ export const adminCreateMember = asyncHandler(async (req: Request, res: Response
     // an unnecessary Activate step for admin-registered members).
     status: bodyStatus,
     isAutoCreated: bodyIsAutoCreated,
+    password,
   } = req.body;
 
   // Normalize before validating length/format (§Rule: Aadhaar 12 digits, PAN 10 chars) —
@@ -236,9 +238,15 @@ export const adminCreateMember = asyncHandler(async (req: Request, res: Response
     if (!tithiCalendarTypeId) errors.tithiCalendarTypeId = ['Required'];
   }
 
+  if (password && password.length < 6) {
+    errors.password = ['Password must be at least 6 characters'];
+  }
+
   if (Object.keys(errors).length > 0) {
     throw ApiError.validation(errors);
   }
+
+  const passwordHash = password ? await bcrypt.hash(password, 10) : undefined;
 
   const existing = await prisma.user.findUnique({ where: { mobile } });
   if (existing) throw ApiError.conflict('This mobile number is already registered');
@@ -269,6 +277,7 @@ export const adminCreateMember = asyncHandler(async (req: Request, res: Response
         status: bodyStatus === 'INACTIVE' ? 'PENDING_OTP' : 'ACTIVE',
         primaryRoleKey: category === 'NON_JAIN' ? 'NON_JAIN_MEMBER' : 'MEMBER',
         createdByAdmin: true,
+        passwordHash,
       },
     });
     return tx.member.create({

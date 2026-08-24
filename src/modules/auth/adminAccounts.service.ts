@@ -20,6 +20,7 @@ const GRANTABLE_ACTIONS: PermissionAction[] = ['VIEW', 'CREATE', 'EDIT', 'APPROV
  */
 export async function createAdminAccount(input: {
   mobile: string;
+  password?: string;
   firstName: string;
   lastName?: string;
   role: RoleKey;
@@ -40,7 +41,8 @@ export async function createAdminAccount(input: {
   const existing = await prisma.user.findUnique({ where: { mobile: input.mobile } });
   if (existing) throw ApiError.conflict('This mobile number is already registered');
 
-  const tempPassword = crypto.randomBytes(6).toString('hex');
+  const isCustomPassword = !!input.password;
+  const tempPassword = input.password || crypto.randomBytes(6).toString('hex');
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
   const user = await prisma.$transaction(async (tx) => {
@@ -90,10 +92,12 @@ export async function createAdminAccount(input: {
     templateKey: 'ADMIN_ACCOUNT_CREATED',
     category: 'SERVICE',
     to: { WHATSAPP: input.mobile, SMS: input.mobile },
-    body: `Your JiNANAM ${input.role.replace('_', ' ')} account has been created. Mobile: ${input.mobile}, temporary password: ${tempPassword}. Please log in and change it immediately.`,
+    body: isCustomPassword 
+      ? `Your JiNANAM ${input.role.replace('_', ' ')} account has been created. Mobile: ${input.mobile}. Please log in using the password you set.` 
+      : `Your JiNANAM ${input.role.replace('_', ' ')} account has been created. Mobile: ${input.mobile}, temporary password: ${tempPassword}. Please log in and change it immediately.`,
   });
 
-  return { user, tempPassword: process.env.NODE_ENV === 'production' ? undefined : tempPassword };
+  return { user, tempPassword: process.env.NODE_ENV === 'production' || isCustomPassword ? undefined : tempPassword };
 }
 
 /** Temple/Dharamshala/JC admins may edit their own account only — never create/delete other admins (§3). */

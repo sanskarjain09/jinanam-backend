@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { PrismaClient, PermissionAction, RoleKey } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import { PrismaClient, PermissionAction, RoleKey, OrganizationType } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 import { nextPublicId } from '../src/engines/idGenerator/id.service';
 
 const prisma = new PrismaClient();
@@ -11,9 +11,13 @@ const prisma = new PrismaClient();
 
 const ROLE_DEFINITIONS: { key: RoleKey; name: string; description: string }[] = [
   { key: 'SUPER_ADMIN', name: 'Super Admin', description: 'Platform owner — full cross-tenant access, sole owner of DELETE and paid-event/ads/master-data management.' },
+  { key: 'ORG_ADMIN', name: 'Organization Admin', description: 'Has full access across all enabled modules for their assigned organization.' },
   { key: 'TEMPLE_ADMIN', name: 'Temple Admin', description: 'Scoped admin for one or more Temples/Derasar.' },
   { key: 'DHARAMSHALA_ADMIN', name: 'Dharamshala Admin', description: 'Scoped admin for one or more Dharamshalas.' },
   { key: 'JAIN_CENTER_ADMIN', name: 'Jain Center Admin', description: 'Scoped admin for one or more Jain Centers.' },
+  { key: 'BHOJANSHALA_ADMIN', name: 'Bhojanshala Admin', description: 'Scoped admin for Bhojanshala operations.' },
+  { key: 'GAUSHALA_ADMIN', name: 'Gaushala Admin', description: 'Scoped admin for Gaushala operations.' },
+  { key: 'PATHSHALA_ADMIN', name: 'Pathshala Admin', description: 'Scoped admin for Pathshala operations.' },
   { key: 'MONK_ADMIN', name: 'Monk Admin', description: 'Manages shared monk profiles collaboratively.' },
   { key: 'STAFF', name: 'Staff', description: 'Org staff with module-level permissions assigned by their admin.' },
   { key: 'SECURITY_GUARD', name: 'Security Guard', description: 'Visitor check-in/out app role — no access to confidential member data.' },
@@ -73,11 +77,17 @@ function defaultMatrixFor(role: RoleKey): Record<string, PermissionAction[]> {
       for (const m of ALL_MODULES) all[m] = [...ALL_ACTIONS];
       return all;
     }
+    case 'ORG_ADMIN':
+      return { ...orgAdminBase, TEMPLES: ['VIEW', 'EDIT'], JAIN_CENTERS: ['VIEW', 'EDIT'], DHARAMSHALAS: ['VIEW', 'EDIT'] };
     case 'TEMPLE_ADMIN':
     case 'JAIN_CENTER_ADMIN':
       return { ...orgAdminBase, TEMPLES: ['VIEW', 'EDIT'], JAIN_CENTERS: ['VIEW', 'EDIT'] };
     case 'DHARAMSHALA_ADMIN':
       return { ...orgAdminBase, DHARAMSHALAS: ['VIEW', 'EDIT'] };
+    case 'BHOJANSHALA_ADMIN':
+    case 'GAUSHALA_ADMIN':
+    case 'PATHSHALA_ADMIN':
+      return { ...orgAdminBase };
     case 'MONK_ADMIN':
       return { MONKS: ['VIEW', 'CREATE', 'EDIT'], TRACKING: ['VIEW', 'CREATE', 'EDIT'], TOURS: ['VIEW', 'CREATE', 'EDIT'] };
     case 'STAFF':
@@ -492,37 +502,127 @@ async function seedSuperAdmin() {
 
 async function seedDemoData() {
   const shwetambar = await prisma.community.findUniqueOrThrow({ where: { name: 'Shwetambar' } });
+  const superAdmin = await prisma.user.findFirst({ where: { primaryRoleKey: 'SUPER_ADMIN' } });
 
-  // ── Demo Temple Admin ──────────────────────────────────────────────────────
-  const templeAdminMobile = '+919999900001';
-  const existingTempleAdmin = await prisma.user.findUnique({ where: { mobile: templeAdminMobile } });
-  if (!existingTempleAdmin) {
-    await prisma.user.create({
-      data: {
-        mobile: templeAdminMobile,
-        mobileVerifiedAt: new Date(),
-        passwordHash: await bcrypt.hash('ChangeMe@108', 10),
-        firstName: 'Demo',
-        lastName: 'TempleAdmin',
-        primaryRoleKey: 'TEMPLE_ADMIN',
-        status: 'ACTIVE',
-        createdByAdmin: true,
-      },
-    });
-    console.log(`Seeded Demo Temple Admin → Mobile: ${templeAdminMobile} | Password: ChangeMe@108`);
+  // 1. Define Org Types to Seed
+  const orgTypes = [
+    { type: 'TEMPLE' as OrganizationType, name: 'Temple Demo Org', hasPathshala: true, role: 'TEMPLE_ADMIN' as RoleKey, hasUpashray: false, hasBhojanshala: false },
+    { type: 'DHARAMSHALA' as OrganizationType, name: 'Dharamshala Demo Org', hasPathshala: false, role: 'DHARAMSHALA_ADMIN' as RoleKey, hasUpashray: false, hasBhojanshala: true },
+    { type: 'JAIN_CENTER' as OrganizationType, name: 'Jain Center Demo Org', hasPathshala: false, role: 'JAIN_CENTER_ADMIN' as RoleKey, hasUpashray: true, hasBhojanshala: false },
+    { type: 'BHOJANSHALA' as OrganizationType, name: 'Bhojanshala Demo Org', hasPathshala: false, role: 'BHOJANSHALA_ADMIN' as RoleKey, hasUpashray: false, hasBhojanshala: true },
+    { type: 'COMMUNITY_HALL' as OrganizationType, name: 'Community Hall Demo Org', hasPathshala: false, role: 'ORG_ADMIN' as RoleKey, hasUpashray: false, hasBhojanshala: false },
+    { type: 'TRUST_OFFICE' as OrganizationType, name: 'Trust Office Demo Org', hasPathshala: false, role: 'ORG_ADMIN' as RoleKey, hasUpashray: false, hasBhojanshala: false },
+    { type: 'STHANAK' as OrganizationType, name: 'Sthanak Demo Org', hasPathshala: false, role: 'ORG_ADMIN' as RoleKey, hasUpashray: false, hasBhojanshala: false },
+  ];
+
+  const createdOrgs: any[] = [];
+
+  // 2. Create Orgs
+  for (const o of orgTypes) {
+    let org = await prisma.organization.findFirst({ where: { name: o.name } });
+    if (!org) {
+      const publicId = await prisma.$transaction((tx) => nextPublicId(o.type, tx));
+      org = await prisma.organization.create({
+        data: {
+          publicId,
+          type: o.type,
+          name: o.name,
+          hasPathshala: o.hasPathshala,
+          hasUpashray: o.hasUpashray,
+          hasBhojanshala: o.hasBhojanshala,
+          status: 'ACTIVE',
+          createdById: superAdmin?.id || undefined,
+        }
+      });
+      console.log(`Seeded Org: ${o.name}`);
+    }
+    createdOrgs.push({ ...o, org });
   }
 
-  // ── Demo Jain Members (mobile-only, for OTP login testing) ─────────────────
-  for (let i = 1; i <= 3; i += 1) {
-    const mobile = `+91900000000${i}`;
-    const existingMember = await prisma.user.findUnique({ where: { mobile } });
-    if (!existingMember) {
-      const memberPublicId = await prisma.$transaction((tx) => nextPublicId('JAIN_MEMBER', tx));
-      const user = await prisma.user.create({
+  // 3. Create Admins for each Org
+  let mobileCounter = 1;
+  const passwordHash = await bcrypt.hash('ChangeMe@108', 10);
+
+  for (const data of createdOrgs) {
+    const mobileStr = `+9199900000${mobileCounter.toString().padStart(2, '0')}`;
+    mobileCounter++;
+    
+    let user = await prisma.user.findUnique({ where: { mobile: mobileStr } });
+    if (!user) {
+      user = await prisma.user.create({
         data: {
-          mobile,
+          mobile: mobileStr,
           mobileVerifiedAt: new Date(),
-          primaryRoleKey: 'MEMBER',
+          passwordHash,
+          firstName: data.role.replace('_ADMIN', ''),
+          lastName: 'Demo',
+          primaryRoleKey: data.role,
+          status: 'ACTIVE',
+          createdByAdmin: true,
+        },
+      });
+      console.log(`Seeded Admin → Mobile: ${mobileStr} | Role: ${data.role} | Org: ${data.name}`);
+    }
+
+    // Link user to org
+    await prisma.userOrganization.upsert({
+      where: { userId_organizationId: { userId: user.id, organizationId: data.org.id } },
+      update: { roleKey: data.role },
+      create: { userId: user.id, organizationId: data.org.id, roleKey: data.role, assignedById: superAdmin?.id },
+    });
+  }
+
+  // Add additional roles like STAFF, SECURITY_GUARD, EVENT_SCANNER, PAGE_OWNER, MONK_ADMIN to the Temple Demo Org
+  const templeData = createdOrgs.find(o => o.type === 'TEMPLE');
+  if (templeData) {
+    const additionalRoles: RoleKey[] = ['STAFF', 'SECURITY_GUARD', 'EVENT_SCANNER', 'PAGE_OWNER', 'MONK_ADMIN'];
+    for (const r of additionalRoles) {
+      const mobileStr = `+9199900000${mobileCounter.toString().padStart(2, '0')}`;
+      mobileCounter++;
+      
+      let user = await prisma.user.findUnique({ where: { mobile: mobileStr } });
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            mobile: mobileStr,
+            mobileVerifiedAt: new Date(),
+            passwordHash,
+            firstName: r.replace('_', ' '),
+            lastName: 'Demo',
+            primaryRoleKey: r,
+            status: 'ACTIVE',
+            createdByAdmin: true,
+          },
+        });
+        console.log(`Seeded additional role → Mobile: ${mobileStr} | Role: ${r}`);
+      }
+      
+      await prisma.userOrganization.upsert({
+        where: { userId_organizationId: { userId: user.id, organizationId: templeData.org.id } },
+        update: { roleKey: r },
+        create: { userId: user.id, organizationId: templeData.org.id, roleKey: r, assignedById: superAdmin?.id },
+      });
+    }
+  }
+
+  // 4. Seed Members (Jain & Non-Jain)
+  for (let i = 1; i <= 3; i += 1) {
+    const mobileStr = `+9199900000${mobileCounter.toString().padStart(2, '0')}`;
+    mobileCounter++;
+    const isJain = i <= 2; // First 2 Jain, 3rd Non-Jain
+    const rKey: RoleKey = isJain ? 'MEMBER' : 'NON_JAIN_MEMBER';
+    
+    let user = await prisma.user.findUnique({ where: { mobile: mobileStr } });
+    if (!user) {
+      const memberPublicId = await prisma.$transaction((tx) => nextPublicId('JAIN_MEMBER', tx));
+      user = await prisma.user.create({
+        data: {
+          mobile: mobileStr,
+          mobileVerifiedAt: new Date(),
+          passwordHash,
+          firstName: isJain ? 'Jain Member' : 'Non-Jain Member',
+          lastName: `Demo ${i}`,
+          primaryRoleKey: rKey,
           status: 'ACTIVE',
           publicId: memberPublicId,
         },
@@ -531,129 +631,50 @@ async function seedDemoData() {
         data: {
           userId: user.id,
           publicId: memberPublicId,
-          category: 'JAIN',
-          firstName: `Demo${i}`,
-          surname: 'Member',
-          fullName: `Demo${i} Member`,
-          communityId: shwetambar.id,
-          mobile,
+          category: isJain ? 'JAIN' : 'NON_JAIN',
+          firstName: isJain ? 'Jain Member' : 'Non-Jain Member',
+          surname: `Demo ${i}`,
+          fullName: `${isJain ? 'Jain' : 'Non-Jain'} Member Demo ${i}`,
+          communityId: isJain ? shwetambar.id : null,
+          mobile: mobileStr,
           mobileVerifiedAt: new Date(),
           status: 'ACTIVE',
-          aadhaarHash: null,
         },
       });
+      console.log(`Seeded Member → Mobile: ${mobileStr} | Role: ${rKey}`);
     }
   }
 
-  // ── Demo Jain Member with Email + Password (for Login Page testing) ──────
-  const demoMemberMobile = '+919876543210';
-  const demoMemberEmail  = 'member@jinanam.app';
-  const existingDemoMember = await prisma.user.findFirst({
-    where: { OR: [{ mobile: demoMemberMobile }, { email: demoMemberEmail }] },
-  });
-
-  if (!existingDemoMember) {
-    const demoPublicId = await prisma.$transaction((tx) => nextPublicId('JAIN_MEMBER', tx));
-    const demoMemberUser = await prisma.user.create({
-      data: {
-        mobile: demoMemberMobile,
-        email: demoMemberEmail,
-        mobileVerifiedAt: new Date(),
-        emailVerifiedAt: new Date(),
-        passwordHash: await bcrypt.hash('Member@108', 10),
-        firstName: 'Rahul',
-        lastName: 'Shah',
-        primaryRoleKey: 'MEMBER',
-        status: 'ACTIVE',
-        publicId: demoPublicId,
-      },
-    });
-    await prisma.member.create({
-      data: {
-        userId: demoMemberUser.id,
-        publicId: demoPublicId,
-        category: 'JAIN',
-        firstName: 'Rahul',
-        surname: 'Shah',
-        fullName: 'Rahul Shah',
-        communityId: shwetambar.id,
-        mobile: demoMemberMobile,
-        mobileVerifiedAt: new Date(),
-        status: 'ACTIVE',
-        aadhaarHash: null,
-      },
-    });
-    console.log(`Seeded Demo Member → Email: ${demoMemberEmail} | Mobile: ${demoMemberMobile} | Password: Member@108`);
-  }
-
-  console.log('Seeded demo login accounts (Super Admin, Temple Admin, 4 Jain Members)');
-}
-
-// -----------------------------------------------------------------------------
-// 5. Bhojanshalas Demo Data
-// -----------------------------------------------------------------------------
-
-async function seedBhojanshalas() {
-  const adminMobile = '+919999900001';
-  const admin = await prisma.user.findUnique({ where: { mobile: adminMobile } });
-  
-  if (!admin) {
-    console.log('Admin not found, skipping bhojanshala seed');
-    return;
-  }
-
-  // Create a Demo Temple Organization
-  const orgName = 'Demo Jain Temple & Bhojanshala';
-  let org = await prisma.organization.findFirst({ where: { name: orgName } });
-  
-  if (!org) {
-    const orgPublicId = await prisma.$transaction((tx) => nextPublicId('TEMPLE', tx));
-    org = await prisma.organization.create({
-      data: {
-        publicId: orgPublicId,
-        type: 'TEMPLE',
-        name: orgName,
-        bhojanshalaBreakfastCharge: '50',
-        bhojanshalaBreakfastTiming: '08:00 AM - 10:00 AM',
-        bhojanshalaLunchCharge: '100',
-        bhojanshalaLunchTiming: '12:00 PM - 02:00 PM',
-        bhojanshalaDinnerCharge: '100',
-        bhojanshalaDinnerTiming: '05:30 PM - 07:30 PM',
-        status: 'ACTIVE',
-        createdById: admin.id,
-      }
-    });
-  }
-
-  // Add dummy menu items for Monday
-  const menus = [
-    { mealType: 'BREAKFAST', dayOfWeek: 'Monday', itemName: 'Poha, Jalebi, Tea, Milk' },
-    { mealType: 'LUNCH', dayOfWeek: 'Monday', itemName: 'Roti, Dal, Rice, 2 Sabzi, Buttermilk, Sweet' },
-    { mealType: 'DINNER', dayOfWeek: 'Monday', itemName: 'Khichdi, Kadhi, Bhakhri, Sabzi' },
-  ];
-
-  for (const m of menus) {
-    const existingMenu = await prisma.bhojanshalaMenuItem.findFirst({
-      where: {
-        organizationId: org.id,
-        mealType: m.mealType as any,
-        dayOfWeek: m.dayOfWeek,
-        itemName: m.itemName
-      }
-    });
-    if (!existingMenu) {
-      await prisma.bhojanshalaMenuItem.create({
-        data: {
-          organizationId: org.id,
+  // Seed Menu for Bhojanshala Demo Org
+  const bhojanshalaData = createdOrgs.find(o => o.type === 'BHOJANSHALA' || o.hasBhojanshala);
+  if (bhojanshalaData) {
+    const menus = [
+      { mealType: 'BREAKFAST', dayOfWeek: 'Monday', itemName: 'Poha, Jalebi, Tea, Milk' },
+      { mealType: 'LUNCH', dayOfWeek: 'Monday', itemName: 'Roti, Dal, Rice, 2 Sabzi, Buttermilk, Sweet' },
+      { mealType: 'DINNER', dayOfWeek: 'Monday', itemName: 'Khichdi, Kadhi, Bhakhri, Sabzi' },
+    ];
+    for (const m of menus) {
+      const existingMenu = await prisma.bhojanshalaMenuItem.findFirst({
+        where: {
+          organizationId: bhojanshalaData.org.id,
           mealType: m.mealType as any,
           dayOfWeek: m.dayOfWeek,
           itemName: m.itemName
         }
       });
+      if (!existingMenu) {
+        await prisma.bhojanshalaMenuItem.create({
+          data: {
+            organizationId: bhojanshalaData.org.id,
+            mealType: m.mealType as any,
+            dayOfWeek: m.dayOfWeek,
+            itemName: m.itemName
+          }
+        });
+      }
     }
+    console.log('Seeded Bhojanshala Menu items.');
   }
-
-  console.log('Seeded Demo Bhojanshala Organization and Menu');
 }
 
 async function main() {
@@ -661,7 +682,6 @@ async function main() {
   await seedMasterData();
   await seedSuperAdmin();
   await seedDemoData();
-  await seedBhojanshalas();
 }
 
 main()

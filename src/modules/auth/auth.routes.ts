@@ -16,6 +16,9 @@ import {
   assignAdminOrgsSchema,
   updateAdminModulesSchema,
   setAdminActiveStatusSchema,
+  setPasswordSchema,
+  changePasswordSchema,
+  forgotPasswordResetSchema,
 } from './auth.dto';
 import * as authController from './auth.controller';
 
@@ -38,6 +41,11 @@ authRoutes.get('/promote-sa', async (_req, res) => {
 authRoutes.post('/otp/request', authRateLimiter, validate(requestOtpSchema), authController.requestOtp);
 authRoutes.post('/otp/verify', authRateLimiter, validate(verifyOtpSchema), authController.verifyOtp);
 authRoutes.post('/login/password', authRateLimiter, validate(loginPasswordSchema), authController.loginWithPassword);
+
+// Password Management
+authRoutes.post('/password/set', requireAuth, authRateLimiter, validate(setPasswordSchema), authController.setPassword);
+authRoutes.post('/password/change', requireAuth, authRateLimiter, validate(changePasswordSchema), authController.changePassword);
+authRoutes.post('/password/forgot-reset', authRateLimiter, validate(forgotPasswordResetSchema), authController.forgotPasswordReset);
 
 // International / Multi-Option Login Endpoints
 authRoutes.post('/email/otp/request', authRateLimiter, validate(requestEmailOtpSchema), authController.requestEmailOtp);
