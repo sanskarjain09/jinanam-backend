@@ -2788,6 +2788,7 @@ enum OrganizationType {
   COMMUNITY_HALL
   TRUST_OFFICE
   STHANAK
+  GAUSHALA
 }
 
 enum OrganizationStatus {

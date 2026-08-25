@@ -14,6 +14,7 @@ const PREFIX_BY_TYPE: Record<OrganizationType, keyof typeof ID_PREFIXES> = {
   TRUST_OFFICE: 'TRUST_OFFICE',
   STHANAK: 'STHANAK',
   PATHSHALA: 'PATHSHALA',
+  GAUSHALA: 'GAUSHALA',
 };
 
 /** Only Super Admin creates Temples/JCs/Dharamshalas (§5.5, §5.6) — enforced at the route layer via requireRole. */
