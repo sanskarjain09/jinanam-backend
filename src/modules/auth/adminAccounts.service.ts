@@ -105,6 +105,34 @@ export async function updateOwnAdminProfile(userId: string, input: { firstName?:
   return prisma.user.update({ where: { id: userId }, data: input });
 }
 
+export async function updateAdminAccount(targetUserId: string, input: { firstName?: string; lastName?: string; mobile?: string; password?: string }, actingSuperAdminId: string) {
+  const target = await prisma.user.findUniqueOrThrow({ where: { id: targetUserId } });
+  if (!ADMIN_ROLES.includes(target.primaryRoleKey)) {
+    throw ApiError.validation({ userId: ['Target user is not an admin account'] });
+  }
+
+  const data: any = {};
+  if (input.firstName !== undefined) data.firstName = input.firstName;
+  if (input.lastName !== undefined) data.lastName = input.lastName;
+  if (input.mobile !== undefined && input.mobile !== target.mobile) {
+    const existing = await prisma.user.findUnique({ where: { mobile: input.mobile } });
+    if (existing && existing.id !== targetUserId) throw ApiError.conflict('This mobile number is already registered to another user');
+    data.mobile = input.mobile;
+  }
+  let tempPassword;
+  if (input.password) {
+    data.passwordHash = await bcrypt.hash(input.password, 10);
+    tempPassword = input.password;
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: targetUserId },
+    data,
+  });
+
+  return { user: updated, tempPassword: process.env.NODE_ENV === 'production' ? undefined : tempPassword };
+}
+
 /**
  * §4.1: Super Admin dynamically restricts which sidebar tabs/modules a
  * specific Admin can see and use. Implemented as a full-replace over the
@@ -137,7 +165,8 @@ export async function setAdminModuleGrants(targetUserId: string, grantedModules:
     await tx.userPermissionOverride.deleteMany({ where: { userId: targetUserId, organizationId: null } });
 
     const rows: Prisma.UserPermissionOverrideCreateManyInput[] = [];
-    for (const module of allModuleKeys) {
+    const allModulesToProcess = new Set<string>([...allModuleKeys, ...grantedModules]);
+    for (const module of allModulesToProcess) {
       const allowed = grantedSet.has(module);
       for (const action of GRANTABLE_ACTIONS) {
         rows.push({ userId: targetUserId, organizationId: null, module, action, allowed, createdById: actingSuperAdminId });

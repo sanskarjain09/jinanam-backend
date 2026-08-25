@@ -21,6 +21,7 @@ templeRoutes.post('/', requireAuth, requireRole('SUPER_ADMIN'), validate(createO
 templeRoutes.get('/bhojanalay-directory', requireAuth, bhojanalayDirectory);
 templeRoutes.get('/', requireAuth, ctrl.list);
 templeRoutes.get('/:organizationId', requireAuth, ctrl.get);
+templeRoutes.patch('/:organizationId/modules', requireAuth, requirePermission('SETTINGS.SE_MODULE_CONTROLLER', 'EDIT'), scopeToOrganization, ctrl.updateModules);
 templeRoutes.patch('/:organizationId', requireAuth, requirePermission('TEMPLES', 'EDIT'), scopeToOrganization, validate(updateOrganizationSchema), ctrl.update);
 
 // Logo upload

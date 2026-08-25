@@ -16,7 +16,6 @@ const ROLE_DEFINITIONS: { key: RoleKey; name: string; description: string }[] = 
   { key: 'DHARAMSHALA_ADMIN', name: 'Dharamshala Admin', description: 'Scoped admin for one or more Dharamshalas.' },
   { key: 'JAIN_CENTER_ADMIN', name: 'Jain Center Admin', description: 'Scoped admin for one or more Jain Centers.' },
   { key: 'BHOJANSHALA_ADMIN', name: 'Bhojanshala Admin', description: 'Scoped admin for Bhojanshala operations.' },
-  { key: 'GAUSHALA_ADMIN', name: 'Gaushala Admin', description: 'Scoped admin for Gaushala operations.' },
   { key: 'PATHSHALA_ADMIN', name: 'Pathshala Admin', description: 'Scoped admin for Pathshala operations.' },
   { key: 'MONK_ADMIN', name: 'Monk Admin', description: 'Manages shared monk profiles collaboratively.' },
   { key: 'STAFF', name: 'Staff', description: 'Org staff with module-level permissions assigned by their admin.' },
@@ -85,7 +84,6 @@ function defaultMatrixFor(role: RoleKey): Record<string, PermissionAction[]> {
     case 'DHARAMSHALA_ADMIN':
       return { ...orgAdminBase, DHARAMSHALAS: ['VIEW', 'EDIT'] };
     case 'BHOJANSHALA_ADMIN':
-    case 'GAUSHALA_ADMIN':
     case 'PATHSHALA_ADMIN':
       return { ...orgAdminBase };
     case 'MONK_ADMIN':

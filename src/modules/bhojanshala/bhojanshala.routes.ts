@@ -38,6 +38,7 @@ const orgCtrl = makeOrganizationController('BHOJANSHALA');
 router.post('/', requireAuth, requireRole('SUPER_ADMIN'), validate(createOrganizationSchema), orgCtrl.create);
 router.get('/', requireAuth, orgCtrl.list);
 router.get('/:organizationId', requireAuth, orgCtrl.get);
+router.patch('/:organizationId/modules', requireAuth, requirePermission('SETTINGS.SE_MODULE_CONTROLLER', 'EDIT'), scopeToOrganization, orgCtrl.updateModules);
 router.patch('/:organizationId', requireAuth, requirePermission('BHOJANSHALAS', 'EDIT'), scopeToOrganization, validate(updateOrganizationSchema), orgCtrl.update);
 
 const extra = orgExtras('BHOJANSHALA');

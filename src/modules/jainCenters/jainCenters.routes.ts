@@ -24,6 +24,7 @@ const ctrl = makeOrganizationController('JAIN_CENTER');
 jainCenterRoutes.post('/', requireAuth, requireRole('SUPER_ADMIN'), validate(createOrganizationSchema), ctrl.create);
 jainCenterRoutes.get('/', requireAuth, ctrl.list);
 jainCenterRoutes.get('/:organizationId', requireAuth, ctrl.get);
+jainCenterRoutes.patch('/:organizationId/modules', requireAuth, requirePermission('SETTINGS.SE_MODULE_CONTROLLER', 'EDIT'), scopeToOrganization, ctrl.updateModules);
 jainCenterRoutes.patch('/:organizationId', requireAuth, requirePermission('JAIN_CENTERS', 'EDIT'), scopeToOrganization, validate(updateOrganizationSchema), ctrl.update);
 
 jainCenterRoutes.post('/:organizationId/gallery', requireAuth, requirePermission('JAIN_CENTERS', 'EDIT'), scopeToOrganization, validate(addGalleryImageSchema), ctrl.addGalleryImage);

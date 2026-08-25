@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const createOrganizationSchema = z.object({
   body: z.object({
-    type: z.enum(['TEMPLE', 'JAIN_CENTER', 'DHARAMSHALA', 'BHOJANSHALA','GAUSHALA','PATHSHALA', 'COMMUNITY_HALL', 'TRUST_OFFICE']),
+    type: z.enum(['TEMPLE', 'JAIN_CENTER', 'DHARAMSHALA', 'BHOJANSHALA', 'PATHSHALA', 'COMMUNITY_HALL', 'TRUST_OFFICE']),
     name: z.string().min(1),
     shortName: z.string().optional(),
     trustName: z.string().optional(),

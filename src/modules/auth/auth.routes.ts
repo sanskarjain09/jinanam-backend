@@ -19,6 +19,7 @@ import {
   setPasswordSchema,
   changePasswordSchema,
   forgotPasswordResetSchema,
+  updateAdminAccountSchema,
 } from './auth.dto';
 import * as authController from './auth.controller';
 
@@ -64,4 +65,5 @@ authRoutes.post('/admins', requireAuth, requireRole('SUPER_ADMIN', 'ORG_ADMIN', 
 authRoutes.patch('/admins/:userId/organizations', requireAuth, requireRole('SUPER_ADMIN'), validate(assignAdminOrgsSchema), authController.assignAdminOrganizations);
 authRoutes.put('/admins/:userId/modules', requireAuth, requireRole('SUPER_ADMIN', 'ORG_ADMIN', 'TEMPLE_ADMIN', 'DHARAMSHALA_ADMIN', 'BHOJANSHALA_ADMIN', 'JAIN_CENTER_ADMIN'), validate(updateAdminModulesSchema), authController.updateAdminModules);
 authRoutes.patch('/admins/:userId/status', requireAuth, requireRole('SUPER_ADMIN'), validate(setAdminActiveStatusSchema), authController.setAdminActiveStatus);
+authRoutes.patch('/admins/:userId', requireAuth, requireRole('SUPER_ADMIN'), validate(updateAdminAccountSchema), authController.updateAdminAccount);
 authRoutes.delete('/admins/:userId', requireAuth, requireRole('SUPER_ADMIN'), authController.deleteAdminAccount);

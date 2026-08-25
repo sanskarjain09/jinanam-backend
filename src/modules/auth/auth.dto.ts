@@ -130,3 +130,12 @@ export const updateAdminModulesSchema = z.object({
 export const setAdminActiveStatusSchema = z.object({
   body: z.object({ active: z.boolean() }),
 });
+
+export const updateAdminAccountSchema = z.object({
+  body: z.object({
+    firstName: z.string().min(1).optional(),
+    lastName: z.string().optional(),
+    mobile: mobileSchema.optional(),
+    password: z.string().min(6).optional(),
+  }),
+});

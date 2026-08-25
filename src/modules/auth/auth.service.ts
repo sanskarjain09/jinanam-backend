@@ -35,6 +35,15 @@ export async function requestOtpForPurpose(mobile: string, purpose: 'LOGIN' | 'R
     return { redirectToLogin: true as const };
   }
 
+  if (purpose === 'REGISTER') {
+    // BYPASS OTP for Registration
+    const registrationToken = signRegistrationToken({ mobile, verified: true, purpose: 'REGISTER' });
+    return {
+      redirectToLogin: false as const,
+      registrationToken,
+    };
+  }
+
   const { otp, expiresInSeconds } = await sendOtp(mobile);
   // In production this is sent via SMS/WhatsApp, never returned in the API response.
   // Returned here only when not in production to unblock local/dev testing without SMS creds.

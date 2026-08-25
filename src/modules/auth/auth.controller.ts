@@ -237,6 +237,20 @@ export const setAdminActiveStatus = asyncHandler(async (req: Request, res: Respo
   return ok(res, { userId: updated.id, status: updated.status });
 });
 
+export const updateAdminAccount = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminAccountsService.updateAdminAccount(req.params.userId as string, req.body, req.actor!.userId);
+  await recordAudit({
+    ...auditContextFromRequest(req),
+    module: 'SETTINGS',
+    action: 'EDIT',
+    entityType: 'AdminAccount',
+    entityId: req.params.userId as string,
+    after: { ...req.body, password: req.body.password ? '***' : undefined },
+    isCritical: true,
+  });
+  return ok(res, result);
+});
+
 export const listAdmins = asyncHandler(async (req: Request, res: Response) => {
   const admins = await prisma.user.findMany({
     where: {

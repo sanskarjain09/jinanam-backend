@@ -14,7 +14,6 @@ const PREFIX_BY_TYPE: Record<OrganizationType, keyof typeof ID_PREFIXES> = {
   TRUST_OFFICE: 'TRUST_OFFICE',
   STHANAK: 'STHANAK',
   PATHSHALA: 'PATHSHALA',
-  GAUSHALA: 'GAUSHALA',
 };
 
 /** Only Super Admin creates Temples/JCs/Dharamshalas (§5.5, §5.6) — enforced at the route layer via requireRole. */
@@ -454,18 +453,6 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
         { type: 'PATHSHALA', pathshalaPublished: true },
         { hasPathshala: true, pathshalaPublished: true }
       ];
-    }
-  } else if (type === 'GAUSHALA') {
-    if (actor?.isSuperAdmin) {
-      whereClause.OR = [
-        { type: 'GAUSHALA' }
-      ];
-    } else if (actor?.organizationIds && actor.organizationIds.length > 0) {
-      whereClause.OR = [
-        { id: { in: actor.organizationIds }, type: 'GAUSHALA' }
-      ];
-    } else {
-      whereClause.type = 'GAUSHALA';
     }
   } else {
     whereClause.type = type;

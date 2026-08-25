@@ -15,6 +15,14 @@ export const makeOrganizationController = (type: OrganizationType) => ({
     return created(res, org);
   }),
 
+  
+  updateModules: asyncHandler(async (req: Request, res: Response) => {
+    const before = await orgService.getOrganization(req.params.organizationId as string);
+    const org = await orgService.updateOrganization(req.params.organizationId as string, { activeModules: req.body.activeModules }, req.actor!.userId);
+    await recordAudit({ ...auditContextFromRequest(req), organizationId: org.id, module: type, action: 'EDIT', entityType: 'Organization', entityId: org.id, before, after: org });
+    return ok(res, org);
+  }),
+
   update: asyncHandler(async (req: Request, res: Response) => {
     const before = await orgService.getOrganization(req.params.organizationId as string);
     const org = await orgService.updateOrganization(req.params.organizationId as string, req.body, req.actor!.userId);

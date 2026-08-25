@@ -20,6 +20,7 @@ const extra = orgExtras('DHARAMSHALA');
 dharamshalaRoutes.post('/', requireAuth, requireRole('SUPER_ADMIN'), validate(createOrganizationSchema), ctrl.create);
 dharamshalaRoutes.get('/', requireAuth, ctrl.list);
 dharamshalaRoutes.get('/:organizationId', requireAuth, ctrl.get);
+dharamshalaRoutes.patch('/:organizationId/modules', requireAuth, requirePermission('SETTINGS.SE_MODULE_CONTROLLER', 'EDIT'), scopeToOrganization, ctrl.updateModules);
 dharamshalaRoutes.patch('/:organizationId', requireAuth, requirePermission('DHARAMSHALAS', 'EDIT'), scopeToOrganization, validate(updateOrganizationSchema), ctrl.update);
 
 // Logo upload
