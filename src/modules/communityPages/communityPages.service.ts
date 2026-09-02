@@ -101,7 +101,7 @@ export async function superAdminUpdatePage(pageId: string, input: Record<string,
   });
 }
 
-export async function getPage(pageIdOrPublicId: string) {
+export async function getPage(pageIdOrPublicId: string, actorUserId?: string) {
   const page = await prisma.communityPage.findFirst({
     where: { OR: [{ id: pageIdOrPublicId }, { publicId: pageIdOrPublicId }], deletedAt: null },
     include: {
@@ -111,7 +111,19 @@ export async function getPage(pageIdOrPublicId: string) {
     },
   });
   if (!page) throw ApiError.notFound('Community page not found');
-  return page;
+
+  let membershipStatus = null;
+  if (actorUserId) {
+    const member = await prisma.member.findUnique({ where: { userId: actorUserId } });
+    if (member) {
+      const ms = await prisma.communityPageMember.findUnique({
+        where: { pageId_memberId: { pageId: page.id, memberId: member.id } }
+      });
+      if (ms) membershipStatus = ms.status;
+    }
+  }
+
+  return { ...page, membershipStatus, isMember: membershipStatus === 'APPROVED' };
 }
 
 // ─── Join Community flow ──────────────────────────────────────────────────────
@@ -216,6 +228,7 @@ export async function getPageFeed(pageId: string) {
     include: {
       category: { select: { name: true } },
       poll: true,
+      communityPage: { select: { id: true, publicId: true, name: true, logoUrl: true } },
     },
   });
 }

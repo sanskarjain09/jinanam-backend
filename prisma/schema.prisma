@@ -53,6 +53,7 @@ model User {
   permissionOverrides  UserPermissionOverride[]
   createdBy            User?                    @relation("UserCreatedBy", fields: [createdById], references: [id])
   createdUsers         User[]                   @relation("UserCreatedBy")
+  feedPosts            FeedPost[]               @relation("AuthorFeedPosts")
 
   @@index([status])
   @@map("users")
@@ -1729,20 +1730,20 @@ model SimRecord {
 }
 
 model Route {
-  id          String       @id @default(cuid())
-  name        String
+  id                 String       @id @default(cuid())
+  name               String
   monkId             String?
   monkGroupId        String?
   participantMonkIds Json?
   contactPersonIds   Json?
-  journeyDate DateTime
-  stops       Json
-  createdById String?
-  createdAt   DateTime     @default(now())
-  deletedAt   DateTime?
-  journeys    Journey[]
-  monk        MonkProfile? @relation(fields: [monkId], references: [id])
-  monkGroup   MonkGroup?   @relation(fields: [monkGroupId], references: [id])
+  journeyDate        DateTime
+  stops              Json
+  createdById        String?
+  createdAt          DateTime     @default(now())
+  deletedAt          DateTime?
+  journeys           Journey[]
+  monk               MonkProfile? @relation(fields: [monkId], references: [id])
+  monkGroup          MonkGroup?   @relation(fields: [monkGroupId], references: [id])
 
   @@map("routes")
 }
@@ -2129,6 +2130,7 @@ model FeedPost {
   views            FeedPostView[]
   category         FeedCategory?    @relation(fields: [categoryId], references: [id])
   communityPage    CommunityPage?   @relation(fields: [communityPageId], references: [id])
+  authorUser       User?            @relation("AuthorFeedPosts", fields: [authorUserId], references: [id])
   organization     Organization?    @relation(fields: [organizationId], references: [id])
   poll             Poll?
 
@@ -3219,39 +3221,39 @@ model AccommodationRule {
 }
 
 model EventHall {
-  id              String         @id @default(cuid())
-  organizationId  String
-  name            String
-  price           Decimal?       @db.Decimal(12, 2)
-  roomCount       Int            @default(0)
-  foodAvailable   Boolean        @default(false)
-  facilities      String?
-  images          Json?
-  isActive        Boolean        @default(true)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  
-  organization    Organization   @relation(fields: [organizationId], references: [id])
-  bookings        EventHallBooking[]
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  price          Decimal? @db.Decimal(12, 2)
+  roomCount      Int      @default(0)
+  foodAvailable  Boolean  @default(false)
+  facilities     String?
+  images         Json?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  bookings     EventHallBooking[]
 
   @@map("event_halls")
 }
 
 model EventHallBooking {
-  id              String         @id @default(cuid())
+  id              String        @id @default(cuid())
   eventHallId     String
   memberId        String
   bookingDate     DateTime
   timeSlot        String?
-  status          BookingStatus  @default(SUBMITTED)
-  amountPaid      Decimal?       @db.Decimal(12, 2)
-  guestCount      Int            @default(1)
+  status          BookingStatus @default(SUBMITTED)
+  amountPaid      Decimal?      @db.Decimal(12, 2)
+  guestCount      Int           @default(1)
   specialRequests String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  eventHall       EventHall      @relation(fields: [eventHallId], references: [id])
-  member          Member         @relation(fields: [memberId], references: [id])
+  eventHall EventHall @relation(fields: [eventHallId], references: [id])
+  member    Member    @relation(fields: [memberId], references: [id])
 
   @@map("event_hall_bookings")
 }

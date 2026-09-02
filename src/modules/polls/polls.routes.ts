@@ -86,6 +86,15 @@ pollRoutes.delete('/:pollId', requireAuth, requirePermission('POLLS', 'DELETE'),
   return ok(res, { deleted: true });
 }));
 
+pollRoutes.get('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const polls = await prisma.poll.findMany({
+    where: { feedPost: { deletedAt: null, isActive: true } },
+    include: { feedPost: { include: { organization: { select: { id: true, name: true, logoUrl: true, type: true } }, authorUser: { select: { id: true, firstName: true, lastName: true, photoUrl: true, publicId: true } } } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  return ok(res, polls);
+}));
+
 pollRoutes.get('/:pollId/results', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const poll = await prisma.poll.findUnique({
     where: { id: req.params.pollId as string },
@@ -93,11 +102,23 @@ pollRoutes.get('/:pollId/results', requireAuth, asyncHandler(async (req: Request
   });
   if (!poll) throw ApiError.notFound('Poll not found');
 
-  const options = poll.options as string[];
+  const options = poll.options as any[];
   const counts = options.map((label, index) => ({
     index,
-    label,
+    label: typeof label === 'string' ? label : (label as any)?.text || 'Option',
     votes: poll.votes.filter((v) => v.optionIndex === index).length,
   }));
-  return ok(res, { question: poll.question, totalVotes: poll.votes.length, options: counts, endsAt: poll.endsAt });
+  
+  let userVotedOptionIndex = null;
+  if (req.actor) {
+    const member = await prisma.member.findUnique({ where: { userId: req.actor.userId } });
+    if (member) {
+      const userVote = poll.votes.find(v => v.memberId === member.id);
+      if (userVote) {
+        userVotedOptionIndex = userVote.optionIndex;
+      }
+    }
+  }
+
+  return ok(res, { question: poll.question, totalVotes: poll.votes.length, options: counts, endsAt: poll.endsAt, userVotedOptionIndex });
 }));

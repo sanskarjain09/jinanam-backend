@@ -75,13 +75,73 @@ export async function updateRoute(routeId: string, input: Partial<{ name: string
 }
 
 export async function listRoutes(filters: { monkId?: string; monkGroupId?: string }) {
-  return prisma.route.findMany({
+  const routes = await prisma.route.findMany({
     where: { deletedAt: null, monkId: filters.monkId, monkGroupId: filters.monkGroupId },
     include: { 
       monk: { select: { publicId: true, dikshaName: true, photoUrl: true } },
       monkGroup: { select: { name: true, leaderMonkId: true } }
     },
     orderBy: { journeyDate: 'desc' },
+  });
+
+  const contactIds = Array.from(new Set(
+    routes.flatMap(r => (r.contactPersonIds as string[]) || [])
+  ));
+
+  let membersMap = new Map();
+  if (contactIds.length > 0) {
+    const members = await prisma.member.findMany({
+      where: { id: { in: contactIds } },
+      select: { id: true, publicId: true, fullName: true, firstName: true, surname: true, mobile: true }
+    });
+    members.forEach(m => membersMap.set(m.id, m));
+  }
+
+  // Fetch organization names for stops
+  const templeIds = Array.from(new Set(
+    routes.flatMap(r => ((r.stops as any[]) || []).map(s => s.templeId).filter(Boolean))
+  ));
+  
+  let orgsMap = new Map();
+  if (templeIds.length > 0) {
+    const orgs = await prisma.organization.findMany({
+      where: { id: { in: templeIds } },
+      select: { id: true, name: true, type: true, city: true }
+    });
+    orgs.forEach(o => orgsMap.set(o.id, o));
+  }
+
+  // Fetch participant monks data
+  const participantMonkIds = Array.from(new Set(
+    routes.flatMap(r => (r.participantMonkIds as string[]) || [])
+  ));
+
+  let participantMonksMap = new Map();
+  if (participantMonkIds.length > 0) {
+    const participantMonks = await prisma.monkProfile.findMany({
+      where: { id: { in: participantMonkIds } },
+      select: { id: true, publicId: true, dikshaName: true, nameBeforeDiksha: true }
+    });
+    participantMonks.forEach(m => participantMonksMap.set(m.id, m));
+  }
+
+  return routes.map(r => {
+    const populatedStops = ((r.stops as any[]) || []).map(stop => {
+      const org = stop.templeId ? orgsMap.get(stop.templeId) : null;
+      return {
+        ...stop,
+        orgName: org ? org.name : undefined,
+        orgType: org ? org.type : undefined,
+        orgCity: org ? org.city : undefined
+      };
+    });
+
+    return {
+      ...r,
+      stops: populatedStops,
+      contactPersonsData: ((r.contactPersonIds as string[]) || []).map(id => membersMap.get(id)).filter(Boolean),
+      participantMonksData: ((r.participantMonkIds as string[]) || []).map(id => participantMonksMap.get(id)).filter(Boolean)
+    };
   });
 }
 
@@ -267,6 +327,11 @@ export async function getMemberMonkView(monkId: string) {
       photoUrl: true,
       gender: true,
       bio: true,
+      dikshaDate: true,
+      dikshaPlace: true,
+      dikshaGuru: { select: { dikshaName: true } },
+      community: { select: { name: true } },
+      subCommunity: { select: { name: true } },
       currentTemple: { select: { name: true, city: true, publicId: true } },
       // Privacy: no emergency contacts, no device internals for members
     },

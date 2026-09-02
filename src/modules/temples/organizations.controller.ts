@@ -47,8 +47,8 @@ export const makeOrganizationController = (type: OrganizationType) => ({
   }),
 
   list: asyncHandler(async (req: Request, res: Response) => {
-    const { city, state } = req.query as { city?: string; state?: string };
-    const orgs = await orgService.listOrganizations(type, { city, state }, req.actor);
+    const { city, state, q } = req.query as { city?: string; state?: string; q?: string };
+    const orgs = await orgService.listOrganizations(type, { city, state, q }, req.actor);
     return ok(res, orgs);
   }),
 

@@ -39,6 +39,7 @@ export const availabilityQuerySchema = z.object({
 
 export const submitBookingSchema = z.object({
   body: z.object({
+    organizationId: z.string().optional(),
     bookingItemId: z.string().min(1),
     dateFrom: z.coerce.date(),
     dateTo: z.coerce.date().optional(),

@@ -15,6 +15,7 @@ export const createRouteSchema = z.object({
           templeId: z.string().optional(),
           templeName: z.string(),
           expectedArrival: z.coerce.date().optional(),
+          dateTime: z.string().optional(),
         }),
       )
       .min(2, 'A route needs at least an origin and a destination'),

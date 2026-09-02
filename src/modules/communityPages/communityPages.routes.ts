@@ -125,7 +125,7 @@ communityPageRoutes.post('/', requireAuth, requireRole('SUPER_ADMIN'), validate(
 
 // ─── Get single page ──────────────────────────────────────────────────────────
 communityPageRoutes.get('/:pageId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const page = await pagesService.getPage(req.params.pageId as string);
+  const page = await pagesService.getPage(req.params.pageId as string, req.actor?.userId);
   return ok(res, page);
 }));
 

@@ -158,7 +158,7 @@ function rankPost(post: any, ctx: FeedContext): number {
   if (cfg.geo?.country && cfg.geo.country === ctx.country) return penalty + computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: 7, isGlobalFallback: false });
 
   // P4: global fallback
-  if (cfg.isPublic || (post.organizationId === null && post.authorId === null)) {
+  if (cfg.isPublic || (post.organizationId == null && post.authorUserId == null) || post.sourceModule === 'POLLS') {
     return penalty + computeFeedPriorityRank({ isFollowed: false, isCommunityMatch: false, geoRingIndex: null, isGlobalFallback: true });
   }
 
@@ -182,6 +182,8 @@ export async function getSmartFeed(
         feedPost: {
           include: {
             organization: { select: { id: true, name: true, publicId: true, logoUrl: true, type: true } },
+            communityPage: { select: { id: true, name: true, publicId: true, logoUrl: true } },
+            authorUser: { select: { id: true, firstName: true, lastName: true, photoUrl: true, publicId: true } },
             category: true,
             poll: true,
           },
@@ -195,6 +197,8 @@ export async function getSmartFeed(
       where: { isActive: true, deletedAt: null },
       include: {
         organization: { select: { id: true, name: true, publicId: true, logoUrl: true, type: true } },
+        communityPage: { select: { id: true, name: true, publicId: true, logoUrl: true } },
+        authorUser: { select: { id: true, firstName: true, lastName: true, photoUrl: true, publicId: true } },
         category: true,
         poll: true,
       },

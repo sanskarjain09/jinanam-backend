@@ -58,7 +58,7 @@ export async function listPublicBookingItems(organizationId: string) {
       }
     }
     const amenities = Array.from(amenitiesSet);
-    
+
     // Check attached bathroom
     const attachedBathroom = matchingRooms.some(r => r.attachedBathroom?.toLowerCase() === 'yes' || r.attachedBathroom?.toLowerCase() === 'true');
 
@@ -138,7 +138,7 @@ export async function getAvailabilityCalendar(bookingItemId: string, from: Date,
     const dayKey = cursor.toISOString().slice(0, 10);
     const isBlackout = blackouts.some((b) => b.date.toISOString().slice(0, 10) === dayKey);
     const internal = internalReservations.find((r) => r.date.toISOString().slice(0, 10) === dayKey);
-    
+
     // Sum up the quantity of rooms booked for this day
     const dayBookingsCount = bookings.filter((b) => {
       const bookFrom = b.dateFrom.toISOString().slice(0, 10);
@@ -171,7 +171,7 @@ export async function getAvailabilityCalendar(bookingItemId: string, from: Date,
 
 async function pushStatus(bookingId: string, status: BookingStatus, changedById?: string, note?: string, tx: Prisma.TransactionClient | typeof prisma = prisma) {
   await tx.bookingStatusHistory.create({ data: { bookingId, status, changedById, note } });
-  
+
   // Non-blocking dashboard stats update broadcast
   tx.booking.findUnique({ where: { id: bookingId }, select: { organizationId: true } })
     .then((booking) => {
@@ -180,11 +180,43 @@ async function pushStatus(bookingId: string, status: BookingStatus, changedById?
         broadcastDashboardUpdate(booking.organizationId);
       }
     })
-    .catch(() => {});
+    .catch(() => { });
 }
 
-export async function submitBooking(memberId: string, input: { bookingItemId: string; dateFrom: Date; dateTo?: Date; slot?: string; peopleCount: number; quantity?: number }) {
-  const item = await prisma.bookingItem.findUnique({ where: { id: input.bookingItemId } });
+export async function submitBooking(memberId: string, input: { organizationId?: string; bookingItemId: string; dateFrom: Date; dateTo?: Date; slot?: string; peopleCount: number; quantity?: number }) {
+  let item = await prisma.bookingItem.findUnique({ where: { id: input.bookingItemId } });
+  
+  if (!item && input.organizationId) {
+    item = await prisma.bookingItem.findFirst({
+      where: { organizationId: input.organizationId, name: input.bookingItemId, deletedAt: null }
+    });
+    
+    if (!item) {
+      let category = await prisma.bookingCategory.findFirst();
+      if (!category) {
+        category = await prisma.bookingCategory.create({ data: { name: 'Rooms' } });
+      }
+      
+      // Attempt to find actual price from physical rooms
+      const room = await prisma.roomOrHall.findFirst({
+        where: { name: input.bookingItemId, wing: { building: { organizationId: input.organizationId } }, deletedAt: null },
+      });
+      const chargeAmount = room?.pricePerUnit ? Number(room.pricePerUnit) : 0;
+      
+      item = await prisma.bookingItem.create({
+        data: {
+          organizationId: input.organizationId,
+          name: input.bookingItemId,
+          categoryId: category.id,
+          type: chargeAmount > 0 ? 'PAID' : 'FREE',
+          chargeAmount,
+          status: 'ACTIVE',
+          durationType: 'MULTI_DAY'
+        }
+      });
+    }
+  }
+
   if (!item || item.deletedAt || item.status !== 'ACTIVE') throw ApiError.notFound('Booking item not available');
 
   if (item.capacityMaxPeople && input.peopleCount > item.capacityMaxPeople) {
@@ -192,7 +224,7 @@ export async function submitBooking(memberId: string, input: { bookingItemId: st
   }
 
   // Slot conflict check: blackouts + internal reservations + capacity
-  const calendar = await getAvailabilityCalendar(input.bookingItemId, input.dateFrom, input.dateTo ?? input.dateFrom, { isAdmin: false });
+  const calendar = await getAvailabilityCalendar(item.id, input.dateFrom, input.dateTo ?? input.dateFrom, { isAdmin: false });
   const unavailable = calendar.days.find((d) => d.status !== 'AVAILABLE');
   if (unavailable) throw ApiError.conflict(`Selected date ${unavailable.date} is not available (${unavailable.status})`);
 
@@ -479,7 +511,6 @@ async function issueBookingReceipt(bookingId: string) {
 // -----------------------------------------------------------------------------
 
 export async function listMyBookings(memberId: string, query: { scope: 'upcoming' | 'active' | 'past' | 'all'; month?: number; year?: number; categoryId?: string; organizationId?: string; page: number; pageSize: number }) {
-  const now = new Date();
   const where: Prisma.BookingWhereInput = {
     memberId,
     deletedAt: null,
@@ -487,25 +518,33 @@ export async function listMyBookings(memberId: string, query: { scope: 'upcoming
     bookingItem: query.categoryId ? { categoryId: query.categoryId } : undefined,
   };
 
+  const passesWhere: Prisma.BhojanshalaPassWhereInput = {
+    memberId,
+    organizationId: query.organizationId,
+  };
+
   if (query.scope === 'upcoming') {
     where.status = { notIn: ['CHECKED_IN', 'CHECKED_OUT', 'COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'] };
+    passesWhere.status = { notIn: ['SCANNED', 'CANCELLED', 'EXPIRED'] };
   } else if (query.scope === 'active') {
     where.status = { in: ['CHECKED_IN'] };
+    passesWhere.status = { in: ['PENDING', 'BOOKED'] };
   } else if (query.scope === 'past') {
     where.status = { in: ['CHECKED_OUT', 'COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'] };
+    passesWhere.status = { in: ['SCANNED', 'CANCELLED', 'EXPIRED'] };
   }
 
   if (query.month && query.year) {
-    where.dateFrom = {
-      gte: new Date(query.year, query.month - 1, 1),
-      lt: new Date(query.year, query.month, 1),
-    };
+    where.dateFrom = { gte: new Date(query.year, query.month - 1, 1), lt: new Date(query.year, query.month, 1) };
+    passesWhere.date = { gte: new Date(query.year, query.month - 1, 1), lt: new Date(query.year, query.month, 1) };
   } else if (query.year) {
     where.dateFrom = { gte: new Date(query.year, 0, 1), lt: new Date(query.year + 1, 0, 1) };
+    passesWhere.date = { gte: new Date(query.year, 0, 1), lt: new Date(query.year + 1, 0, 1) };
   }
 
-  const [total, rows] = await Promise.all([
-    prisma.booking.count({ where }),
+  const includePasses = !query.categoryId;
+
+  const [bookings, passes] = await Promise.all([
     prisma.booking.findMany({
       where,
       include: {
@@ -515,10 +554,27 @@ export async function listMyBookings(memberId: string, query: { scope: 'upcoming
         receipt: { select: { publicId: true, pdfUrl: true } },
       },
       orderBy: { dateFrom: 'desc' },
-      skip: (query.page - 1) * query.pageSize,
-      take: query.pageSize,
     }),
+    includePasses
+      ? prisma.bhojanshalaPass.findMany({
+          where: passesWhere,
+          include: { organization: { select: { name: true, publicId: true } } },
+          orderBy: { date: 'desc' },
+        })
+      : Promise.resolve([]),
   ]);
+
+  const allItems = [
+    ...bookings,
+    ...passes.map((p) => ({
+      ...p,
+      isBhojanshala: true,
+      dateFrom: p.date, // Alias for sorting
+    })),
+  ].sort((a, b) => (b.dateFrom?.getTime() || 0) - (a.dateFrom?.getTime() || 0));
+
+  const total = allItems.length;
+  const rows = allItems.slice((query.page - 1) * query.pageSize, query.page * query.pageSize);
 
   return { total, rows };
 }
@@ -587,7 +643,7 @@ export async function checkInBooking(bookingId: string, input: {
   });
 
   if (roomId) {
-    await prisma.roomOrHall.update({ where: { id: roomId }, data: { status: 'OCCUPIED' } }).catch(() => {});
+    await prisma.roomOrHall.update({ where: { id: roomId }, data: { status: 'OCCUPIED' } }).catch(() => { });
   }
 
   await pushStatus(bookingId, 'CHECKED_IN', actorUserId, `Checked in at front desk`);
@@ -625,7 +681,7 @@ export async function checkOutBooking(bookingId: string, input: {
   if (booking.allocatedRoomId) {
     const ids = booking.allocatedRoomId.split(',').map(id => id.trim()).filter(Boolean);
     if (ids.length > 0) {
-      await prisma.roomOrHall.updateMany({ where: { id: { in: ids } }, data: { status: 'DIRTY' } }).catch(() => {});
+      await prisma.roomOrHall.updateMany({ where: { id: { in: ids } }, data: { status: 'DIRTY' } }).catch(() => { });
     }
   }
 
@@ -658,9 +714,9 @@ export async function transferRoom(bookingId: string, newRoomId: string, reason:
   });
 
   if (oldRoomId) {
-    await prisma.roomOrHall.update({ where: { id: oldRoomId }, data: { status: 'DIRTY' } }).catch(() => {});
+    await prisma.roomOrHall.update({ where: { id: oldRoomId }, data: { status: 'DIRTY' } }).catch(() => { });
   }
-  await prisma.roomOrHall.update({ where: { id: newRoomId }, data: { status: 'OCCUPIED' } }).catch(() => {});
+  await prisma.roomOrHall.update({ where: { id: newRoomId }, data: { status: 'OCCUPIED' } }).catch(() => { });
 
   await pushStatus(bookingId, 'CHECKED_IN', actorUserId, `Room transferred from ${oldRoomId || 'N/A'} to ${newRoomId}. Reason: ${reason}`);
   return updated;

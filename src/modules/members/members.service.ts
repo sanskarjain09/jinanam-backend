@@ -268,6 +268,9 @@ export async function getMemberByUserId(userId: string) {
           relationshipType: true,
         },
       },
+      community: true,
+      subCommunity: true,
+      gaccha: true,
     },
   });
 }
@@ -283,6 +286,9 @@ export async function getMemberByPublicId(publicId: string) {
           relationshipType: true,
         },
       },
+      community: true,
+      subCommunity: true,
+      gaccha: true,
     },
   });
 
@@ -297,6 +303,9 @@ export async function getMemberByPublicId(publicId: string) {
             relationshipType: true,
           },
         },
+        community: true,
+        subCommunity: true,
+        gaccha: true,
       },
     });
   }

@@ -44,6 +44,47 @@ export const registerNonJainMember = asyncHandler(async (req: Request, res: Resp
   return created(res, { ...serializeMemberFull(member, null, true), ...tokens });
 });
 
+export const initMemberProfile = asyncHandler(async (req: Request, res: Response) => {
+  const { category } = req.body;
+  if (!['JAIN', 'NON_JAIN'].includes(category)) throw ApiError.badRequest('Invalid category');
+
+  let member = await membersService.getMemberByUserId(req.actor!.userId) as any;
+  if (member) throw ApiError.badRequest('Member profile already exists');
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.actor!.userId } });
+  const prefix = category === 'JAIN' ? 'JAIN_MEMBER' : 'NON_JAIN_MEMBER';
+  const publicId = await nextPublicId(prefix);
+  const fName = user.firstName || 'User';
+  const lName = user.lastName || '';
+  
+  member = await prisma.member.create({
+    data: {
+      userId: user.id,
+      publicId,
+      category,
+      firstName: fName,
+      surname: lName,
+      fullName: `${fName} ${lName}`.trim(),
+      status: 'ACTIVE',
+      profileCompletionPct: 10,
+      mobile: user.mobile || `google:${user.email}`,
+      email: user.email,
+      photoUrl: user.photoUrl,
+    },
+  }) as any;
+  await prisma.memberPrivacySetting.create({ data: { memberId: member.id } });
+
+  // Make sure to also update the user's primaryRoleKey if necessary
+  if (category === 'NON_JAIN') {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { primaryRoleKey: 'NON_JAIN_MEMBER' }
+    });
+  }
+
+  return created(res, serializeMemberFull(member, null, true));
+});
+
 export const getMyProfile = asyncHandler(async (req: Request, res: Response) => {
   const member = await membersService.getMemberByUserId(req.actor!.userId) as any;
   if (!member) throw ApiError.notFound('Member profile not found');
@@ -81,8 +122,29 @@ export const getMyFollows = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const updateMyProfile = asyncHandler(async (req: Request, res: Response) => {
-  const member = await membersService.getMemberByUserId(req.actor!.userId) as any;
-  if (!member) throw ApiError.notFound('Member profile not found');
+  let member = await membersService.getMemberByUserId(req.actor!.userId) as any;
+  if (!member) {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: req.actor!.userId } });
+    const publicId = await nextPublicId('JAIN_MEMBER');
+    const fName = user.firstName || 'User';
+    const lName = user.lastName || '';
+    member = await prisma.member.create({
+      data: {
+        userId: user.id,
+        publicId,
+        firstName: fName,
+        surname: lName,
+        fullName: `${fName} ${lName}`.trim(),
+        category: 'JAIN',
+        status: 'ACTIVE',
+        profileCompletionPct: 10,
+        mobile: user.mobile || `google:${user.email}`,
+        email: user.email,
+        photoUrl: user.photoUrl,
+      },
+    });
+    await prisma.memberPrivacySetting.create({ data: { memberId: member.id } });
+  }
 
   const before = { ...member };
   const updated = await membersService.updateMemberProfile(member.id, req.body);

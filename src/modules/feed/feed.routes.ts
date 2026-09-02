@@ -443,7 +443,11 @@ feedRoutes.post(
   asyncHandler(async (req: Request, res: Response) => {
     const member = await prisma.member.findUnique({ where: { userId: req.actor!.userId } });
     if (!member) throw ApiError.notFound('Member profile not found');
-    const vote = await feedService.votePoll(req.params.pollId as string, member.id, Number(req.body.optionIndex));
+    const optionIndex = req.body.optionIndex;
+    if (optionIndex === undefined || optionIndex === null || isNaN(Number(optionIndex))) {
+      throw ApiError.badRequest('Invalid or missing optionIndex');
+    }
+    const vote = await feedService.votePoll(req.params.pollId as string, member.id, Number(optionIndex));
     return ok(res, vote);
   })
 );

@@ -291,6 +291,9 @@ export async function getOrganization(organizationId: string) {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     include: {
+      community: true,
+      subCommunity: true,
+      mulNayakBhagwan: true,
       parentOrganization: true,
       childOrganizations: true,
       gallery: { orderBy: { order: 'asc' } },
@@ -319,6 +322,9 @@ export async function getOrganization(organizationId: string) {
   if (!org) throw ApiError.notFound('Organization not found');
 
   const followerCount = org._count?.follows || 0;
+  const sect = org.community?.name || undefined;
+  const subSect = org.subCommunity?.name || undefined;
+  const establishedYear = org.establishedDate ? org.establishedDate.getFullYear() : undefined;
   
   // If this is a Dharamshala, populate and map its buildings/rooms
   if (org.type === 'DHARAMSHALA') {
@@ -379,6 +385,9 @@ export async function getOrganization(organizationId: string) {
 
     return {
       ...org,
+      sect,
+      subSect,
+      establishedYear,
       followerCount,
       buildings: mappedBuildings
     };
@@ -386,11 +395,14 @@ export async function getOrganization(organizationId: string) {
 
   return {
     ...org,
+    sect,
+    subSect,
+    establishedYear,
     followerCount
   };
 }
 
-export async function listOrganizations(type: OrganizationType, filters: { city?: string; state?: string; hasBhojanshala?: boolean }, actor?: any) {
+export async function listOrganizations(type: OrganizationType, filters: { city?: string; state?: string; hasBhojanshala?: boolean; q?: string }, actor?: any) {
   const whereClause: any = {
     deletedAt: null,
     city: filters.city,
@@ -399,6 +411,17 @@ export async function listOrganizations(type: OrganizationType, filters: { city?
 
   if (filters.hasBhojanshala !== undefined) {
     whereClause.hasBhojanshala = filters.hasBhojanshala;
+  }
+
+  if (filters.q) {
+    whereClause.AND = [
+      {
+        OR: [
+          { name: { contains: filters.q, mode: 'insensitive' } },
+          { trustRegistrationNumber: { contains: filters.q, mode: 'insensitive' } }
+        ]
+      }
+    ];
   }
 
   if (type === 'DHARAMSHALA') {
@@ -664,14 +687,20 @@ export async function addTempleAnnouncement(organizationId: string, input: { tit
 }
 
 export async function followOrganization(organizationId: string, memberId: string) {
-  const follow = await prisma.organizationFollow.create({ data: { organizationId, memberId } });
-  await prisma.organization.update({ where: { id: organizationId }, data: { followersCount: { increment: 1 } } });
-  return follow;
+  const existing = await prisma.organizationFollow.findUnique({ where: { organizationId_memberId: { organizationId, memberId } } });
+  if (!existing) {
+    const follow = await prisma.organizationFollow.create({ data: { organizationId, memberId } });
+    await prisma.organization.update({ where: { id: organizationId }, data: { followersCount: { increment: 1 } } });
+    return follow;
+  }
+  return existing;
 }
 
 export async function unfollowOrganization(organizationId: string, memberId: string) {
-  await prisma.organizationFollow.delete({ where: { organizationId_memberId: { organizationId, memberId } } });
-  await prisma.organization.update({ where: { id: organizationId }, data: { followersCount: { decrement: 1 } } });
+  const deleted = await prisma.organizationFollow.deleteMany({ where: { organizationId, memberId } });
+  if (deleted.count > 0) {
+    await prisma.organization.update({ where: { id: organizationId }, data: { followersCount: { decrement: 1 } } });
+  }
 }
 
 /** "Report Incorrect Information" auto-creates a support ticket (§5.5). */

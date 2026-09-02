@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { prisma } from '@/config/prisma';
 import { ApiError } from '@/utils/ApiError';
 import { requestOtp as sendOtp, verifyOtp as checkOtp } from './otp.service';
+import { nextPublicId } from '@/engines/idGenerator/id.service';
 import { signAccessToken, signRefreshToken, verifyRefreshToken, signRegistrationToken } from '@/engines/rbac/jwt.service';
 import { logger } from '@/config/logger';
 

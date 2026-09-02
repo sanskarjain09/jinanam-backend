@@ -68,6 +68,8 @@ export const createPass = async (req: Request, res: Response) => {
   const passData = { ...req.body };
   if (memberIdentifier) {
     passData.status = 'PENDING';
+  } else {
+    passData.status = 'BOOKED';
   }
   
   const result = await bhojanshalaService.createPass(organizationId as string, memberId, passData);

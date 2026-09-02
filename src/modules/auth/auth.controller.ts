@@ -167,10 +167,11 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
             }
           }
         }
-      }
+      },
+      member: { select: { id: true } }
     },
   });
-  return ok(res, user);
+  return ok(res, { ...user, hasMemberProfile: !!user.member });
 });
 
 export const myModules = asyncHandler(async (req: Request, res: Response) => {

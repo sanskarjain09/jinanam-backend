@@ -47,6 +47,7 @@ memberRoutes.get('/', requireAuth, requirePermission('MEMBERS', 'VIEW'), members
 memberRoutes.post('/admin-create', requireAuth, requirePermission('MEMBERS', 'CREATE'), membersController.adminCreateMember);
 memberRoutes.post('/register/jain', validate(registerJainMemberSchema), membersController.registerJainMember);
 memberRoutes.post('/register/non-jain', validate(registerNonJainMemberSchema), membersController.registerNonJainMember);
+memberRoutes.post('/init', requireAuth, membersController.initMemberProfile);
 memberRoutes.get('/me', requireAuth, membersController.getMyProfile);
 memberRoutes.get('/me/follows', requireAuth, membersController.getMyFollows);
 memberRoutes.patch('/me', requireAuth, validate(updateMemberProfileSchema), membersController.updateMyProfile);

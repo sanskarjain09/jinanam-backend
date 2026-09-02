@@ -23,8 +23,8 @@ trackingRoutes.post('/journeys/:journeyId/events', requireAuth, requirePermissio
 trackingRoutes.get('/journeys/active', requireAuth, trackingController.activeJourneys);
 trackingRoutes.get('/journeys/:journeyId/timeline', requireAuth, trackingController.journeyTimeline);
 
-// Live map for admin dashboards
-trackingRoutes.get('/live-map', requireAuth, requirePermission('TRACKING', 'VIEW'), validate(liveMapQuerySchema), trackingController.liveMap);
+// Live map for all users (members and admins)
+trackingRoutes.get('/live-map', requireAuth, validate(liveMapQuerySchema), trackingController.liveMap);
 
 // Member-side monk views (privacy-filtered)
 trackingRoutes.get('/monks/:monkId', requireAuth, trackingController.memberMonkView);
